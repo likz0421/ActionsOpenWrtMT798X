@@ -158,6 +158,21 @@
   color: var(--d-primary);
 }
 .liuli-dash .d-icon svg { width: 21px; height: 21px; }
+.liuli-dash .d-icon img.brand-logo { width: 22px; height: 22px; display: block; }
+.liuli-dash .liuli-hero-icon img.brand-logo {
+  width: 30px; height: 30px; display: block;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
+}
+/* 深色品牌 logo (如 Apple) 在渐变英雄卡上反白, 保证可见 */
+.liuli-dash .liuli-hero-icon img.brand-logo[src*="apple"],
+.liuli-dash .liuli-hero-icon img.brand-logo[src*="asus"],
+.liuli-dash .liuli-hero-icon img.brand-logo[src*="linksys"],
+.liuli-dash .liuli-hero-icon img.brand-logo[src*="netgear"],
+.liuli-dash .liuli-hero-icon img.brand-logo[src*="mikrotik"],
+.liuli-dash .liuli-hero-icon img.brand-logo[src*="sonos"],
+.liuli-dash .liuli-hero-icon img.brand-logo[src*="honor"] {
+  filter: brightness(0) invert(1) drop-shadow(0 2px 6px rgba(0,0,0,.3));
+}
 .liuli-dash .d-title { flex: 1; min-width: 0; }
 .liuli-dash .d-name {
   font-size: 14px; font-weight: 720; letter-spacing: -.01em;

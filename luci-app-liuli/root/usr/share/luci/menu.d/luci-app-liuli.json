@@ -1,0 +1,10 @@
+{
+	"admin/status/liuli": {
+		"title": "设备看板",
+		"order": 6,
+		"action": {
+			"type": "view",
+			"path": "liuli/dashboard"
+		}
+	}
+}

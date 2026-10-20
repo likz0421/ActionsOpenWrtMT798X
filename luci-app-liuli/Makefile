@@ -44,12 +44,14 @@ define Package/luci-app-liuli/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/liuli
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/liuli/dashboard.js $(1)/www/luci-static/resources/view/liuli/
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/liuli.css $(1)/www/luci-static/resources/view/
-	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/controller
-	$(INSTALL_DATA) ./root/usr/share/ucode/luci/controller/liuli.uc $(1)/usr/share/ucode/luci/controller/
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/liuli/brands
+	$(CP) ./htdocs/luci-static/resources/view/liuli/brands/* $(1)/www/luci-static/resources/view/liuli/brands/
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/ucode
 	$(INSTALL_DATA) ./root/usr/share/rpcd/ucode/luci.liuli $(1)/usr/share/rpcd/ucode/
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-app-liuli.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-liuli.json $(1)/usr/share/luci/menu.d/
 endef
 
 define Package/luci-app-liuli/postinst

@@ -38,6 +38,86 @@ const TYPE_NAMES = {
 	iot: '智能设备', router: '路由器', unknown: '设备'
 };
 
+/* ---------- 品牌 logo (simple-icons, CC0, 本地内置) ---------- */
+
+/* OUI 厂商名 → logo slug */
+const BRAND_LOGOS = {
+	'Apple': 'apple', 'Samsung': 'samsung', 'Xiaomi': 'xiaomi', 'HUAWEI': 'huawei',
+	'Honor': 'honor', 'OPPO': 'oppo', 'vivo': 'vivo', 'OnePlus': 'oneplus',
+	'Google': 'google', 'Motorola': 'motorola', 'Nokia': 'nokia',
+	'Lenovo': 'lenovo', 'Intel': 'intel', 'NVIDIA': 'nvidia', 'Sony': 'sony',
+	'LG': 'lg', 'TP-Link': 'tplink', 'ASUSTek': 'asus', 'NETGEAR': 'netgear',
+	'MikroTik': 'mikrotik', 'Ubiquiti': 'ubiquiti', 'Cisco': 'cisco',
+	'Linksys': 'linksys', 'Fortinet': 'fortinet',
+	'Raspberry Pi': 'raspberrypi', 'Synology': 'synology', 'QNAP': 'qnap',
+	'Seagate': 'seagate', 'Sonos': 'sonos', 'Espressif': 'espressif',
+	'Shelly': 'shelly', 'Hewlett-Packard': 'hp', 'Epson': 'epson'
+};
+
+/* 主机名 → logo slug (MAC 随机化时的主要识别手段) */
+const HOST_BRANDS = [
+	[/iphone|ipad|ipod|macbook|imac|macmini|airpods|appletv|homepod/i, 'apple'],
+	[/galaxy|sm-[sgatv]\d|samsung/i, 'samsung'],
+	[/redmi|poco|xiaomi|miui|mijia|mitv|mi-tv|米家|小米/i, 'xiaomi'],
+	[/huawei|matebook|mate\s?\d|nova\s?\d|harmony|华为|荣耀/i, 'huawei'],
+	[/honor/i, 'honor'],
+	[/oneplus|一加/i, 'oneplus'],
+	[/oppo|reno|find\s?x/i, 'oppo'],
+	[/vivo|iqoo/i, 'vivo'],
+	[/pixel|nexus|chromecast|nest|google/i, 'google'],
+	[/thinkpad|ideapad|legion|lenovo/i, 'lenovo'],
+	[/ubuntu/i, 'ubuntu'], [/debian/i, 'debian'], [/fedora/i, 'fedora'], [/linux/i, 'linux'],
+	[/android/i, 'android'],
+	[/synology|ds\d{3}|群晖/i, 'synology'],
+	[/qnap|威联通/i, 'qnap'],
+	[/truenas|freenas/i, 'truenas'],
+	[/openmediavault|omv/i, 'openmediavault'],
+	[/unraid/i, 'unraid'],
+	[/raspberrypi|raspberry/i, 'raspberrypi'],
+	[/espressif|esp32|esp8266/i, 'espressif'],
+	[/shelly/i, 'shelly'],
+	[/sonos/i, 'sonos'],
+	[/roku/i, 'roku'],
+	[/openwrt|immortalwrt|lede/i, 'openwrt'],
+	[/homeassistant|home-assistant/i, 'homeassistant'],
+	[/pihole/i, 'pihole'],
+	[/nextcloud/i, 'nextcloud'],
+	[/jellyfin/i, 'jellyfin'],
+	[/alist/i, 'alist'],
+	[/tplink|tp-link|水星|mercusys/i, 'tplink'],
+	[/asus|rog|rt-[an]|tuf/i, 'asus'],
+	[/netgear|orbi|nighthawk/i, 'netgear'],
+	[/mikrotik|routeros/i, 'mikrotik'],
+	[/ubiquiti|unifi|edgerouter/i, 'ubiquiti'],
+	[/cisco/i, 'cisco'],
+	[/linksys/i, 'linksys'],
+	[/hewlett|hp-|laserjet|officejet/i, 'hp'],
+	[/epson/i, 'epson']
+];
+
+/* slug → 展示名 (主机名识别出品牌时用于补充厂商字段) */
+const BRAND_NAMES = {
+	apple: 'Apple', samsung: 'Samsung', xiaomi: 'Xiaomi', huawei: 'HUAWEI', honor: 'Honor',
+	oppo: 'OPPO', vivo: 'vivo', oneplus: 'OnePlus', google: 'Google', motorola: 'Motorola',
+	nokia: 'Nokia', android: 'Android', lenovo: 'Lenovo', ubuntu: 'Ubuntu', debian: 'Debian',
+	fedora: 'Fedora', linux: 'Linux', synology: 'Synology', qnap: 'QNAP', truenas: 'TrueNAS',
+	openmediavault: 'OpenMediaVault', unraid: 'Unraid', raspberrypi: 'Raspberry Pi',
+	espressif: 'Espressif', shelly: 'Shelly', sonos: 'Sonos', roku: 'Roku', openwrt: 'OpenWrt',
+	homeassistant: 'HomeAssistant', pihole: 'Pi-hole', nextcloud: 'Nextcloud', jellyfin: 'Jellyfin',
+	alist: 'Alist', tplink: 'TP-Link', asus: 'ASUSTek', netgear: 'NETGEAR', mikrotik: 'MikroTik',
+	ubiquiti: 'Ubiquiti', cisco: 'Cisco', linksys: 'Linksys', hp: 'Hewlett-Packard', epson: 'Epson'
+};
+
+function brandSlug(hostname, vendor) {
+	const h = String(hostname || '');
+	for (const [re, slug] of HOST_BRANDS)
+		if (re.test(h))
+			return slug;
+	if (vendor && BRAND_LOGOS[vendor])
+		return BRAND_LOGOS[vendor];
+	return null;
+}
+
 /* ---------- MAC OUI → 厂商 ---------- */
 
 const OUI = {
@@ -209,7 +289,14 @@ function wifiBand(iface) {
 	return null;
 }
 
-function iconEl(type, cls) {
+function iconEl(type, cls, brand) {
+	if (brand)
+		return E('img', {
+			'class': (cls || 'ico') + ' brand-logo',
+			'src': L.resource('view/liuli/brands/' + brand + '.svg'),
+			'alt': brand,
+			'loading': 'lazy'
+		});
 	const el = E('span', { 'class': cls || 'ico' });
 	el.innerHTML = TYPE_ICONS[type] || TYPE_ICONS.unknown;
 	return el;
@@ -266,7 +353,9 @@ return view.extend({
 				dev.rx += Number(t.rx) || 0;
 				dev.tx += Number(t.tx) || 0;
 			}
-			dev.vendor = vendorOf(dev.mac) || '未知';
+			const ouiVendor = vendorOf(dev.mac);
+			dev.brand = brandSlug(dev.hostname, ouiVendor);
+			dev.vendor = ouiVendor || (dev.brand ? (BRAND_NAMES[dev.brand] || dev.brand) : '未知');
 			dev.type = typeOf(dev.hostname, dev.vendor);
 			dev.name = dev.hostname || (dev.vendor + '-' + shortMac(dev.mac));
 		}
@@ -305,7 +394,7 @@ return view.extend({
 		let hero = null;
 		if (top && topTotal > 0) {
 			hero = E('div', { 'class': 'liuli-hero' }, [
-				iconEl(top.type, 'liuli-hero-icon'),
+				iconEl(top.type, 'liuli-hero-icon', top.brand),
 				E('div', { 'class': 'liuli-hero-body' }, [
 					E('div', { 'class': 'liuli-hero-title' }, [ '今日流量冠军' ]),
 					E('div', { 'class': 'liuli-hero-name' }, [ top.name ]),
@@ -400,7 +489,7 @@ return view.extend({
 			'data-wireless': dev.wireless ? '1' : '0'
 		}, [
 			E('div', { 'class': 'd-head' }, [
-				iconEl(type, 'd-icon'),
+				iconEl(type, 'd-icon', dev.brand),
 				E('div', { 'class': 'd-title' }, [
 					E('div', { 'class': 'd-name' }, [ dev.name ]),
 					E('div', { 'class': 'd-meta' }, [ `${dev.vendor} · ${TYPE_NAMES[type] || '设备'}` ])

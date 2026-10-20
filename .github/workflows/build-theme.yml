@@ -50,9 +50,6 @@ jobs:
 
     - name: Install theme & dashboard packages
       run: |
-        # 剔除 feed 中已知存在 kconfig 递归依赖的坏包 (weechat 变体链)
-        rm -rf openwrt/feeds/packages/net/weechat
-        rm -rf openwrt/feeds/luci/applications/luci-app-weechat
         mkdir -p openwrt/package/liuli-theme openwrt/package/luci-app-liuli
         cp -r luci-theme-liuli/. openwrt/package/liuli-theme/
         cp -r luci-app-liuli/. openwrt/package/luci-app-liuli/
@@ -63,7 +60,10 @@ jobs:
         cd openwrt
         ./scripts/feeds update -a
         ./scripts/feeds install -a
-        # 确认包被扫描收录
+        # feeds update 会重新同步所有 feed, 已删除的坏包会被恢复,
+        # 因此必须在 feeds install 之后再剔除 (weechat 变体链存在 kconfig 递归依赖)
+        rm -rf feeds/packages/net/weechat
+        rm -rf feeds/luci/applications/luci-app-weechat
         grep -c liuli tmp/.packagelist 2>/dev/null || true
 
     - name: Toolchain cache key
