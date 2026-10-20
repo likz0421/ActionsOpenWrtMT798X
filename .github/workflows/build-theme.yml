@@ -56,6 +56,9 @@ jobs:
 
     - name: Install theme & dashboard packages
       run: |
+        # 剔除 feed 中已知存在 kconfig 递归依赖的坏包 (weechat 变体链)
+        rm -rf openwrt/feeds/packages/net/weechat
+        rm -rf openwrt/feeds/luci/applications/luci-app-weechat
         mkdir -p openwrt/package/liuli-theme openwrt/package/luci-app-liuli
         cp -r luci-theme-liuli/. openwrt/package/liuli-theme/
         cp -r luci-app-liuli/. openwrt/package/luci-app-liuli/
