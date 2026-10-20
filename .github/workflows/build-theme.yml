@@ -48,12 +48,6 @@ jobs:
         git clone "$REPO_URL" -b "$REPO_BRANCH" --single-branch --depth=1 openwrt
         ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
 
-    - name: Update & install feeds
-      run: |
-        cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
-
     - name: Install theme & dashboard packages
       run: |
         # 剔除 feed 中已知存在 kconfig 递归依赖的坏包 (weechat 变体链)
@@ -63,6 +57,14 @@ jobs:
         cp -r luci-theme-liuli/. openwrt/package/liuli-theme/
         cp -r luci-app-liuli/. openwrt/package/luci-app-liuli/
         ls openwrt/package/liuli-theme openwrt/package/luci-app-liuli
+
+    - name: Update & install feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+        # 确认包被扫描收录
+        grep -c liuli tmp/.packagelist 2>/dev/null || true
 
     - name: Toolchain cache key
       id: cache-key
