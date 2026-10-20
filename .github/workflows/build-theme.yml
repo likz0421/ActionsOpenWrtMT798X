@@ -108,15 +108,15 @@ jobs:
       run: |
         cd openwrt
         make defconfig
-        echo "===== .packagedeps liuli ====="
+        echo "===== .config liuli symbols ====="
+        grep liuli .config || echo "MISSING in .config"
+        echo "===== kconfig fragment ====="
+        grep -c "PACKAGE_luci" tmp/.config-package.in || echo "MISSING in fragment"
+        echo "===== packagedeps ====="
         grep liuli tmp/.packagedeps || echo "MISSING in .packagedeps"
-        echo "===== .packageinfo liuli count ====="
-        grep -c liuli tmp/.packageinfo || echo "MISSING in .packageinfo"
-        echo "===== .packagelist liuli ====="
-        grep liuli tmp/.packagelist || echo "MISSING in .packagelist"
-        echo "===== try compile (verbose) ====="
-        make package/luci-theme-liuli/compile -j1 V=s 2>&1 | tail -40
-        make package/luci-app-liuli/compile -j1 V=s 2>&1 | tail -40
+        echo "===== full build ====="
+        make -j"$(nproc)" || make -j1 V=s
+        echo "===== result ====="
         find bin -name 'luci*liuli*' -exec ls -la {} \;
 
     - name: Collect packages
