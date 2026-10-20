@@ -119,7 +119,54 @@
 			mq.addListener(onChange);
 	} catch (e) {}
 
-	const boot = function () { apply(); };
+	/* ---------- 移动端抽屉: 遮罩 + 点外部关闭 + ESC 关闭 ---------- */
+
+	function setupDrawer() {
+		const nav = document.getElementById('mainmenu');
+		if (!nav)
+			return;
+
+		let backdrop = document.querySelector('.liuli-navbackdrop');
+		if (!backdrop) {
+			backdrop = document.createElement('div');
+			backdrop.className = 'liuli-navbackdrop';
+			document.body.appendChild(backdrop);
+		}
+
+		const sync = () => backdrop.classList.toggle('show', nav.classList.contains('open'));
+		const close = () => nav.classList.remove('open');
+
+		backdrop.addEventListener('click', close);
+
+		document.addEventListener('keydown', (ev) => {
+			if (ev.key == 'Escape')
+				close();
+		});
+
+		/* 侧栏类名变化同步到遮罩 */
+		if (window.MutationObserver)
+			new MutationObserver(sync).observe(nav, { attributes: true, attributeFilter: [ 'class' ] });
+		else
+			window.setInterval(sync, 200);
+
+		/* 点击导航项后自动收起抽屉 (移动端) */
+		nav.addEventListener('click', (ev) => {
+			if (ev.target.closest && ev.target.closest('a') && window.matchMedia('(max-width: 980px)').matches)
+				close();
+		});
+
+		/* 视口变宽时自动收起, 避免残留遮罩挡住页面 */
+		const mq = window.matchMedia('(min-width: 981px)');
+		const onWide = () => { if (mq.matches) close(); };
+		if (mq.addEventListener)
+			mq.addEventListener('change', onWide);
+		else if (mq.addListener)
+			mq.addListener(onWide);
+
+		sync();
+	}
+
+	const boot = function () { apply(); setupDrawer(); };
 
 	if (document.readyState == 'loading')
 		document.addEventListener('DOMContentLoaded', boot);

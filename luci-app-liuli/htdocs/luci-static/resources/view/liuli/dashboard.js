@@ -455,6 +455,7 @@ return view.extend({
 
 		this.elHead = EE('div', { 'class': 'll-head' });
 		this.elStats = EE('div', { 'class': 'll-grid ll-stats' });
+		this.elInsight = EE('div', { 'class': 'll-grid ll-insight' });
 		this.elSystem = EE('div', { 'class': 'll-sys' });
 		this.elServices = EE('div', { 'class': 'll-badges' });
 		this.elSvcMore = EE('div', { 'class': 'll-more' });
@@ -480,6 +481,7 @@ return view.extend({
 			this.elHead,
 			nav,
 			this.elStats,
+			this.elInsight,
 			this.section('系统状态', 'll-sec-system', [ this.elSystem ]),
 			this.section('服务徽标', 'll-sec-services', [ this.elServices, this.elSvcMore ]),
 			this.section('网络与无线', 'll-sec-network', [ this.elNetwork ]),
@@ -516,8 +518,10 @@ return view.extend({
 
 	renderAll() {
 		this.sampleRate();
+		this.dev = this.computeDevices();
 		this.renderHead();
 		this.renderStats();
+		this.renderInsight();
 		this.renderSystem();
 		this.renderServices();
 		this.renderNetwork();
@@ -612,7 +616,7 @@ return view.extend({
 	/* ---------- 概览卡片 ---------- */
 
 	renderStats() {
-		const dev = this.computeDevices();
+		const dev = this.dev ?? this.computeDevices();
 		const sys = this.data.system ?? {};
 		const info = sys.system ?? {};
 		const cpu = sys.cpu ?? {};
@@ -637,6 +641,168 @@ return view.extend({
 			EE('div', { 'class': 'm-top' }, [ iconEl(icon, 'ico'), label ]),
 			EE('div', { 'class': 'm-val' }, [ String(value) ]),
 			unit ? EE('div', { 'class': 'm-unit' }, [ String(unit) ]) : null
+		]);
+	},
+
+	/* ---------- 分析卡: 健康评分 / 设备构成 / 流量排行 ---------- */
+
+	renderInsight() {
+		const sys = this.data.system;
+		const dev = this.dev ?? this.computeDevices();
+
+		dom.content(this.elInsight, [
+			this.healthCard(sys, dev),
+			this.compositionCard(dev),
+			this.rankingCard(dev)
+		]);
+	},
+
+	/* 网络健康评分: 把 CPU / 内存 / 温度 / 连接数 / 存储 / 在线率
+	   加权折算成 0-100 的综合分, 一眼看出路由器当前状态 */
+	healthCard(sys, dev) {
+		const info = sys?.system ?? {};
+		const cpu = sys?.cpu ?? {};
+		const mem = info.memory ?? {};
+		const ct = sys?.conntrack ?? {};
+		const temps = sys?.temp?.zones ?? [];
+		const mounts = sys?.mounts ?? [];
+
+		const items = [];
+
+		if (cpu.usage != null)
+			items.push({ k: 'CPU', v: 100 - cpu.usage, label: cpu.usage + '%', w: 1.0 });
+
+		if (mem.total) {
+			const used = Math.max(0, mem.total - (mem.free ?? 0) - (mem.buffered ?? 0));
+			const pct = Math.min(100, used / mem.total * 100);
+			items.push({ k: '内存', v: 100 - pct, label: Math.round(pct) + '%', w: 1.0 });
+		}
+
+		if (temps.length) {
+			const t = Math.max.apply(null, temps.map((z) => z.value ?? 0));
+			const sc = (t >= 85) ? 0 : (t >= 78) ? 35 : (t >= 70) ? 60 : (t >= 62) ? 80 : 100;
+			items.push({ k: '温度', v: sc, label: t.toFixed(1) + '°C', w: 1.2 });
+		}
+
+		if (ct.max) {
+			const pct = Math.min(100, (ct.count ?? 0) / ct.max * 100);
+			items.push({ k: '连接数', v: 100 - pct, label: (ct.count ?? 0) + ' / ' + ct.max, w: 0.8 });
+		}
+
+		const root = mounts.filter((m) => m.mount == '/overlay')[0] ||
+			mounts.filter((m) => m.mount == '/')[0];
+		if (root && root.percent != null)
+			items.push({ k: '存储', v: 100 - root.percent, label: root.percent + '%', w: 0.8 });
+
+		if (dev.list.length) {
+			const off = dev.list.filter((d) => !d.online).length;
+			const pct = off / dev.list.length * 100;
+			items.push({ k: '设备在线', v: 100 - pct,
+				label: (dev.list.length - off) + ' / ' + dev.list.length, w: 0.6 });
+		}
+
+		if (!items.length)
+			return EE('div', { 'class': 'll-card ll-health' }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('router', 'ico'), '网络健康评分' ]),
+				this.empty('暂无足够数据计算评分')
+			]);
+
+		const tw = items.reduce((a, b) => a + b.w, 0);
+		const score = Math.round(items.reduce((a, b) => a + b.v * b.w, 0) / tw);
+		const grade = (score >= 90) ? { t: '优秀', c: 'ok' } :
+			(score >= 75) ? { t: '良好', c: 'ok' } :
+			(score >= 60) ? { t: '一般', c: 'warn' } :
+			{ t: '需关注', c: 'bad' };
+
+		return EE('div', { 'class': 'll-card ll-health' }, [
+			EE('div', { 'class': 'll-cardtitle' }, [ iconEl('router', 'ico'), '网络健康评分' ]),
+			EE('div', { 'class': 'll-health-top' }, [
+				this.ring(score, '综合分'),
+				EE('div', { 'class': 'll-health-meta' }, [
+					EE('span', { 'class': 'll-grade ' + grade.c }, [ grade.t ]),
+					EE('div', { 'class': 'll-memmeta' }, [ '由 ' + items.length + ' 项指标加权得出' ])
+				])
+			]),
+			EE('div', { 'class': 'll-health-items' }, items.map((it) => EE('div', { 'class': 'll-hitem' }, [
+				EE('span', { 'class': 'k' }, [ it.k ]),
+				EE('span', { 'class': 'b' }, [ EE('i', {
+					'class': (it.v >= 80 ? 'ok' : it.v >= 55 ? 'warn' : 'bad'),
+					'style': 'width:' + Math.max(2, Math.min(100, it.v)) + '%'
+				}) ]),
+				EE('span', { 'class': 'v mono' }, [ it.label ])
+			])))
+		]);
+	},
+
+	/* 设备构成: 按类型统计占比的堆叠条 */
+	compositionCard(dev) {
+		if (!dev.list.length)
+			return EE('div', { 'class': 'll-card ll-composition' }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('users', 'ico'), '设备构成' ]),
+				this.empty('暂无设备')
+			]);
+
+		const order = [ '手机', '平板', '笔记本', '电脑', '电视', 'NAS', '摄像头', '打印机', '智能设备', '路由器', '设备' ];
+		const groups = {};
+		for (const d of dev.list) {
+			const g = TYPE_NAMES[d.type] || '设备';
+			groups[g] = (groups[g] || 0) + 1;
+		}
+
+		const keys = Object.keys(groups).sort((a, b) => {
+			const ia = order.indexOf(a), ib = order.indexOf(b);
+			return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+		});
+
+		const total = dev.list.length;
+		const palette = [ '#5b7cfa', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#fb7185', '#64748b', '#14b8a6', '#a855f7', '#ef4444', '#94a3b8' ];
+
+		return EE('div', { 'class': 'll-card ll-composition' }, [
+			EE('div', { 'class': 'll-cardtitle' }, [ iconEl('users', 'ico'), '设备构成' ]),
+			EE('div', { 'class': 'll-stack' }, keys.map((k, i) => EE('i', {
+				'style': 'width:' + (groups[k] / total * 100) + '%;background:' + palette[i % palette.length],
+				'title': k + ' × ' + groups[k]
+			}))),
+			EE('div', { 'class': 'll-legend' }, keys.map((k, i) => EE('span', { 'class': 'll-lg' }, [
+				EE('i', { 'style': 'background:' + palette[i % palette.length] }),
+				k, EE('b', {}, [ String(groups[k]) ])
+			]))),
+			EE('div', { 'class': 'll-memmeta' }, [
+				'共 ' + total + ' 台 · 在线 ' + dev.online + ' 台'
+			])
+		]);
+	},
+
+	/* 今日流量排行 TOP5 */
+	rankingCard(dev) {
+		const top = dev.list.filter((d) => (d.rx + d.tx) > 0)
+			.slice()
+			.sort((a, b) => (b.rx + b.tx) - (a.rx + a.tx))
+			.slice(0, 5);
+
+		if (!top.length)
+			return EE('div', { 'class': 'll-card ll-ranking' }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('down', 'ico'), '今日流量排行' ]),
+				this.empty('暂无流量数据')
+			]);
+
+		const max = top[0].rx + top[0].tx;
+
+		return EE('div', { 'class': 'll-card ll-ranking' }, [
+			EE('div', { 'class': 'll-cardtitle' }, [ iconEl('down', 'ico'), '今日流量排行 TOP 5' ]),
+			EE('div', { 'class': 'll-rank-list' }, top.map((d, i) => {
+				const total = d.rx + d.tx;
+				const pct = max ? (total / max * 100) : 0;
+				return EE('div', { 'class': 'll-rank-row' }, [
+					EE('span', { 'class': 'rk-n' }, [ String(i + 1) ]),
+					EE('span', { 'class': 'rk-name' }, [ d.name ]),
+					EE('span', { 'class': 'rk-bar' }, [ EE('i', { 'style': 'width:' + pct + '%' }) ]),
+					EE('span', { 'class': 'rk-v mono' }, [ fmtBytes(total) ])
+				]);
+			})),
+			EE('div', { 'class': 'll-memmeta' }, [
+				'今日全网合计 ↓ ' + fmtBytes(dev.totalRx) + ' · ↑ ' + fmtBytes(dev.totalTx)
+			])
 		]);
 	},
 
@@ -891,7 +1057,7 @@ return view.extend({
 			return;
 		}
 
-		const dev = this.computeDevices();
+		const dev = this.dev ?? this.computeDevices();
 		const stationsByIface = dev.stationsByIface;
 		const cards = [];
 
@@ -1114,7 +1280,7 @@ return view.extend({
 	},
 
 	renderDevices() {
-		const dev = this.computeDevices();
+		const dev = this.dev ?? this.computeDevices();
 		const list = dev.list;
 
 		if (!list.length) {
@@ -1157,6 +1323,11 @@ return view.extend({
 			]);
 		}
 
+		/* 设备流量条的基准: 全设备今日最大流量 */
+		this.devMax = 1;
+		for (const d of list)
+			this.devMax = Math.max(this.devMax, d.rx + d.tx);
+
 		dom.content(this.elDevices, list.map((d) => this.deviceCard(d)));
 		this.devList = list;
 		this.applyFilter();
@@ -1166,6 +1337,37 @@ return view.extend({
 		const type = dev.type || 'unknown';
 		const band = dev.wireless ? (wifiBand(dev.iface) || '无线') : '有线';
 		const sig = dev.wireless ? signalText(dev.signal) : null;
+
+		/* 双色流量条: 整体长度 = 相对全网最大流量, 内部按下载/上传切分 */
+		const total = dev.rx + dev.tx;
+		const scale = total > 0 ? Math.max(4, total / (this.devMax || 1) * 100) : 0;
+		const rxPct = total > 0 ? (dev.rx / total * 100) : 0;
+
+		/* 信号强度: -95dBm(0%) ~ -35dBm(100%) */
+		let sigPct = null;
+		if (dev.wireless && dev.signal != null) {
+			sigPct = Math.max(4, Math.min(100, (Number(dev.signal) + 95) / 60 * 100));
+			if (isNaN(sigPct))
+				sigPct = null;
+		}
+
+		const bars = EE('div', { 'class': 'd-bars' }, [
+			EE('div', { 'class': 'd-bar-row' }, [
+				EE('span', { 'class': 'd-bar-k' }, [ '今日流量' ]),
+				EE('span', { 'class': 'd-bar-track' }, [
+					EE('span', { 'class': 'd-bar-in', 'style': 'width:' + scale + '%' }, [
+						EE('i', { 'class': 'rx', 'style': 'width:' + rxPct + '%' }),
+						EE('i', { 'class': 'tx', 'style': 'width:' + Math.max(0, 100 - rxPct) + '%' })
+					])
+				])
+			]),
+			sigPct != null ? EE('div', { 'class': 'd-bar-row' }, [
+				EE('span', { 'class': 'd-bar-k' }, [ '信号' ]),
+				EE('span', { 'class': 'd-bar-track' }, [
+					EE('span', { 'class': 'd-bar-in sig', 'style': 'width:' + sigPct + '%' })
+				])
+			]) : null
+		]);
 
 		return EE('div', {
 			'class': 'll-card ll-device' + (dev.online ? '' : ' offline'),
@@ -1188,6 +1390,7 @@ return view.extend({
 				EE('div', { 'class': 'd-row' }, [ EE('span', { 'class': 'k' }, ['连接方式']), EE('span', { 'class': 'v' }, [ band + (sig ? ` · ${sig}` : '') ]) ]),
 				EE('div', { 'class': 'd-row' }, [ EE('span', { 'class': 'k' }, ['今日流量']), EE('span', { 'class': 'v mono traffic' }, [ `↓ ${fmtBytes(dev.rx)} · ↑ ${fmtBytes(dev.tx)}` ]) ])
 			]),
+			bars,
 			EE('div', { 'class': 'd-status' }, [
 				EE('span', { 'class': 'dot' + (dev.online ? ' on' : '') }),
 				dev.online ? '在线' : '离线'

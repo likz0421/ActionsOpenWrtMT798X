@@ -637,3 +637,204 @@ html[data-liuli-theme="dark"] .liuli-dash .ll-rate-nums .up b { color: #b39bff; 
 	.liuli-dash .ll-procrow { grid-template-columns: 1fr 2fr 42px; }
 	.liuli-dash .ll-procrow .p-pid { display: none; }
 }
+
+/* ============================================================
+   看板自适应: 跟随主题 clamp() 变量, 任意分辨率不溢出不遮挡
+   ============================================================ */
+
+.liuli-dash {
+	--d-gap: clamp(10px, 1.05vw, 16px);
+	--d-pad: clamp(14px, 1.25vw, 18px);
+}
+.liuli-dash .ll-head { gap: clamp(10px, 1.4vw, 18px); }
+.liuli-dash .ll-title h2 { font-size: clamp(19px, 1.4vw, 24px); }
+.liuli-dash .ll-sub { font-size: clamp(11px, 0.74vw, 12.5px); }
+.liuli-dash .ll-headmeta { gap: clamp(10px, 1.4vw, 18px); }
+
+/* 所有网格统一走 auto-fit + minmax(min(Xpx,100%),1fr): 窄屏轨道收到 100% */
+.liuli-dash .ll-grid,
+.liuli-dash .ll-stats,
+.liuli-dash .ll-sys,
+.liuli-dash .ll-net,
+.liuli-dash .ll-disk,
+.liuli-dash .ll-devices,
+.liuli-dash .ll-badges {
+	gap: var(--d-gap);
+	grid-template-columns: repeat(auto-fit, minmax(min(268px, 100%), 1fr));
+}
+.liuli-dash .ll-stats { grid-template-columns: repeat(auto-fit, minmax(min(158px, 100%), 1fr)); }
+.liuli-dash .ll-badges { grid-template-columns: repeat(auto-fill, minmax(min(196px, 100%), 1fr)); }
+.liuli-dash .ll-devices { grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
+
+/* 统计卡片在宽屏保持一行 6 个 */
+@media (min-width: 1280px) {
+	.liuli-dash .ll-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+/* 系统区 4 卡在宽屏一行 */
+@media (min-width: 1500px) {
+	.liuli-dash .ll-sys { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.liuli-dash .ll-card { padding: var(--d-pad) clamp(15px, 1.3vw, 18px); min-width: 0; }
+.liuli-dash .ll-metric .m-val { font-size: clamp(19px, 1.5vw, 25px); }
+.liuli-dash .ll-metric .m-top { font-size: clamp(11px, 0.75vw, 12.2px); }
+
+/* 区块头在窄屏换行 */
+.liuli-dash .ll-sechead { flex-wrap: wrap; gap: 8px; }
+.liuli-dash .ll-sechead h3 { font-size: clamp(13.5px, 0.92vw, 15px); }
+
+/* 卡片内部: 一切长文本都要能被压缩 */
+.liuli-dash .ll-card > *,
+.liuli-dash .d-title,
+.liuli-dash .b-body,
+.liuli-dash .ll-hero-body { min-width: 0; max-width: 100%; }
+
+/* 页头信息行在窄屏自动折行, 不横向溢出 */
+.liuli-dash .ll-headmeta { flex-wrap: wrap; }
+.liuli-dash .ll-kv .v { max-width: clamp(80px, 22vw, 200px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 设备卡: 行内容左右压缩 */
+.liuli-dash .d-row { gap: 8px; min-width: 0; }
+.liuli-dash .d-row .v { min-width: 0; max-width: 62%; }
+
+/* 服务徽标窄屏不被文字撑破 */
+.liuli-dash .ll-badge { min-width: 0; padding: clamp(9px, 0.9vw, 11px) clamp(10px, 1vw, 13px); }
+
+/* 日志: 超宽时横向滚动而不是撑破卡片 */
+.liuli-dash .ll-logbox { overflow-x: auto; }
+.liuli-dash .ll-logline {
+	grid-template-columns: minmax(92px, auto) minmax(88px, auto) minmax(140px, 1fr);
+}
+
+/* 速率卡 / 进程卡跨整行 */
+.liuli-dash .ll-rate, .liuli-dash .ll-proc { grid-column: 1 / -1; }
+.liuli-dash .ll-procrow { gap: clamp(6px, 0.8vw, 10px); }
+
+/* 英雄卡: 窄屏纵向堆叠 */
+@media (max-width: 560px) {
+	.liuli-dash .ll-hero { flex-wrap: wrap; padding: 14px 16px; }
+	.liuli-dash .ll-hero-body { flex: 1 1 100%; }
+	.liuli-dash .ll-hero-badge { margin-left: auto; }
+	.liuli-dash .ll-hero-name { font-size: 17px; }
+}
+
+/* 极窄屏: 统计卡两列 */
+@media (max-width: 420px) {
+	.liuli-dash .ll-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.liuli-dash .ll-logline { grid-template-columns: minmax(76px, auto) minmax(120px, 1fr); }
+	.liuli-dash .ll-filters { gap: 6px; }
+	.liuli-dash .ll-filter { height: 28px; padding: 0 11px; font-size: 11.5px; }
+}
+
+/* ---------- 分析卡: 健康评分 / 设备构成 / 流量排行 ---------- */
+
+.liuli-dash .ll-insight { margin-bottom: 22px; }
+
+/* 健康评分 */
+.liuli-dash .ll-health-top {
+	display: flex; align-items: center; gap: 16px;
+	margin-bottom: 12px; flex-wrap: wrap;
+}
+.liuli-dash .ll-health-meta { flex: 1; min-width: 110px; }
+.liuli-dash .ll-grade {
+	display: inline-block; font-size: 13px; font-weight: 780;
+	padding: 4px 12px; border-radius: 99px; margin-bottom: 2px;
+}
+.liuli-dash .ll-grade.ok { background: rgba(34,197,94,.15); color: #15803d; }
+.liuli-dash .ll-grade.warn { background: rgba(245,158,11,.16); color: #b45309; }
+.liuli-dash .ll-grade.bad { background: rgba(239,68,68,.15); color: #b91c1c; }
+.liuli-dash .ll-health-items { display: flex; flex-direction: column; gap: 5px; }
+.liuli-dash .ll-hitem {
+	display: grid; grid-template-columns: 58px minmax(40px, 1fr) 74px;
+	align-items: center; gap: 8px; font-size: 11.5px;
+}
+.liuli-dash .ll-hitem .k { color: var(--d-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.liuli-dash .ll-hitem .b {
+	height: 6px; border-radius: 99px; overflow: hidden; display: block;
+	background: rgba(148,163,184,.16);
+}
+.liuli-dash .ll-hitem .b > i {
+	display: block; height: 100%; border-radius: 99px;
+	transition: width .6s cubic-bezier(.2,.8,.2,1);
+}
+.liuli-dash .ll-hitem .b > i.ok { background: linear-gradient(90deg, #22c55e, #10b981); }
+.liuli-dash .ll-hitem .b > i.warn { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.liuli-dash .ll-hitem .b > i.bad { background: linear-gradient(90deg, #ef4444, #f97316); }
+.liuli-dash .ll-hitem .v { text-align: right; color: var(--d-ink-2); }
+
+/* 设备构成 */
+.liuli-dash .ll-stack {
+	display: flex; height: 12px; border-radius: 99px; overflow: hidden;
+	background: rgba(148,163,184,.16); margin-bottom: 10px;
+}
+.liuli-dash .ll-stack > i { display: block; height: 100%; transition: width .5s ease; }
+.liuli-dash .ll-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.liuli-dash .ll-lg {
+	display: inline-flex; align-items: center; gap: 5px;
+	font-size: 11.5px; color: var(--d-ink-2);
+}
+.liuli-dash .ll-lg > i { width: 8px; height: 8px; border-radius: 3px; flex: 0 0 8px; }
+.liuli-dash .ll-lg > b { color: var(--d-ink); font-weight: 700; }
+
+/* 流量排行 */
+.liuli-dash .ll-rank-list { display: flex; flex-direction: column; gap: 6px; }
+.liuli-dash .ll-rank-row {
+	display: grid; grid-template-columns: 18px minmax(60px, 1fr) minmax(40px, 2fr) 68px;
+	align-items: center; gap: 8px; font-size: 11.5px;
+}
+.liuli-dash .ll-rank-row .rk-n {
+	font-weight: 800; color: var(--d-ink-3); text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+.liuli-dash .ll-rank-row .rk-name {
+	color: var(--d-ink-2); font-weight: 650;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.liuli-dash .ll-rank-row .rk-bar {
+	height: 7px; border-radius: 99px; overflow: hidden; display: block;
+	background: rgba(148,163,184,.16); min-width: 0;
+}
+.liuli-dash .ll-rank-row .rk-bar > i {
+	display: block; height: 100%; border-radius: 99px;
+	background: linear-gradient(90deg, var(--d-primary), var(--d-primary-2));
+	transition: width .6s cubic-bezier(.2,.8,.2,1);
+}
+.liuli-dash .ll-rank-row .rk-v {
+	text-align: right; color: var(--d-ink); font-weight: 700;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---------- 设备卡内的双色流量条 / 信号条 ---------- */
+
+.liuli-dash .d-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.liuli-dash .d-bar-row {
+	display: grid; grid-template-columns: 56px minmax(0, 1fr);
+	align-items: center; gap: 8px;
+}
+.liuli-dash .d-bar-k {
+	font-size: 10.5px; color: var(--d-ink-3);
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.liuli-dash .d-bar-track {
+	height: 7px; border-radius: 99px; overflow: hidden; display: block;
+	background: rgba(148,163,184,.16); min-width: 0;
+}
+.liuli-dash .d-bar-in {
+	display: flex; height: 100%; border-radius: 99px; overflow: hidden;
+	transition: width .6s cubic-bezier(.2,.8,.2,1);
+	min-width: 3px;
+}
+.liuli-dash .d-bar-in > i { display: block; height: 100%; }
+.liuli-dash .d-bar-in > i.rx { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.liuli-dash .d-bar-in > i.tx { background: linear-gradient(90deg, #a78bfa, #8b5cf6); }
+.liuli-dash .d-bar-in.sig { background: linear-gradient(90deg, #22c55e, #10b981); }
+html[data-liuli-theme="dark"] .liuli-dash .d-bar-in > i.rx { background: linear-gradient(90deg, #60a5fa, #93c5fd); }
+html[data-liuli-theme="dark"] .liuli-dash .d-bar-in > i.tx { background: linear-gradient(90deg, #c4b5fd, #a78bfa); }
+html[data-liuli-theme="dark"] .liuli-dash .ll-hitem .b > i.bad { background: linear-gradient(90deg, #f87171, #fb923c); }
+
+/* 极窄屏: 排行条收起, 只留名字和数值 */
+@media (max-width: 420px) {
+	.liuli-dash .ll-rank-row { grid-template-columns: 16px minmax(50px, 1fr) 62px; }
+	.liuli-dash .ll-rank-row .rk-bar { display: none; }
+	.liuli-dash .ll-hitem { grid-template-columns: 48px minmax(30px, 1fr) 60px; }
+}

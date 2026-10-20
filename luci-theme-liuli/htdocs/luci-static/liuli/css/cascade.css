@@ -770,3 +770,261 @@ html[data-liuli-theme="dark"] .progressbar { background: rgba(255,255,255,.10); 
   justify-content: center;
   margin-top: 12px;
 }
+
+/* ============================================================
+   自适应布局引擎
+   目标: 任意分辨率(360px 手机 ~ 4K)都自动拉伸, 不遮挡 / 不溢出 / 不挤压
+   手段: 流式 clamp() 尺寸 + auto-fit 网格 + 分级降噪 + 防溢出根基
+   ============================================================ */
+
+/* ---------- 1. 流式尺寸变量 ---------- */
+:root {
+	--liuli-sidebar-w: clamp(202px, 14vw, 268px);
+	--liuli-bar-h: clamp(52px, 3.4vh, 62px);
+	--liuli-gutter: clamp(14px, 2.1vw, 34px);
+	--liuli-content-max: 1600px;
+	--liuli-fs-title: clamp(19px, 1.45vw, 25px);
+	--liuli-fs-body: clamp(12.5px, 0.82vw, 13.5px);
+	--liuli-chip-h: clamp(28px, 3.1vh, 34px);
+	--liuli-spark-w: clamp(48px, 6vw, 96px);
+}
+
+/* ---------- 2. 防溢出根基 ---------- */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+.liuli-app { width: 100%; max-width: 100%; }
+.liuli-main { min-width: 0; flex: 1 1 auto; max-width: 100%; }
+
+/* 长串 (MAC / UUID / 域名 / 无空格路径) 不再撑破卡片 */
+#maincontent,
+.liuli-content,
+.cbi-map,
+.cbi-section,
+.cbi-section-node,
+.cbi-value-field,
+.liuli-card,
+.ll-card {
+	min-width: 0;
+	overflow-wrap: break-word;
+	word-break: break-word;
+}
+
+/* 表格/代码块超宽时在本容器内横向滚动, 不撑破页面 */
+.cbi-section,
+.cbi-map,
+.liuli-card { overflow-x: auto; }
+.cbi-section table.table,
+.liuli-card table { min-width: max-content; max-width: 100%; }
+
+/* 代码块与 pre 单独处理 */
+#maincontent pre,
+#maincontent code {
+	max-width: 100%;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+/* 图片 / iframe / canvas 自适应容器宽度 */
+#maincontent img,
+#maincontent canvas,
+#maincontent iframe,
+#maincontent video,
+#maincontent svg { max-width: 100%; height: auto; }
+
+/* 输入框不再溢出 */
+.cbi-input-text,
+.cbi-input-select,
+.cbi-input-password,
+input[type="text"], input[type="password"], input[type="number"], select, textarea {
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+/* ---------- 3. 侧栏: 流式宽度 + 高度自适应 ---------- */
+.liuli-sidenav {
+	width: var(--liuli-sidebar-w);
+	flex: 0 0 var(--liuli-sidebar-w);
+	height: 100vh;
+	height: 100dvh;                 /* 移动端浏览器地址栏遮挡修正 */
+	padding: clamp(12px, 1.4vw, 20px) clamp(10px, 1vw, 16px);
+	overscroll-behavior: contain;
+}
+.liuli-sidenav .brand .name {
+	font-size: clamp(13.5px, 0.95vw, 15.5px);
+	max-width: 100%;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.liuli-sidenav .brand .sub {
+	font-size: clamp(10px, 0.72vw, 11.5px);
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.liuli-nav a {
+	font-size: clamp(12px, 0.83vw, 13.2px);
+	padding: clamp(7px, 0.7vw, 10px) clamp(9px, 0.8vw, 12px);
+	min-width: 0;
+}
+.liuli-nav a > span,
+.liuli-nav a > em {
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+
+/* ---------- 4. 顶栏: 流式高度 + 芯片防挤压 ---------- */
+.liuli-topbar {
+	height: var(--liuli-bar-h);
+	padding: 0 var(--liuli-gutter);
+	gap: clamp(8px, 0.9vw, 16px);
+	min-width: 0;
+}
+.liuli-topbar .brand { min-width: 0; flex: 0 1 auto; overflow: hidden; }
+.liuli-topbar .brand b {
+	font-size: clamp(13px, 0.9vw, 15px);
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	display: block; max-width: clamp(90px, 18vw, 260px);
+}
+.liuli-topbar .brand small {
+	font-size: clamp(9.5px, 0.68vw, 11px);
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	display: block; max-width: clamp(90px, 18vw, 260px);
+}
+
+/* 芯片容器: 永不压缩内容, 必要时内部横向滚动 */
+.liuli-chips {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin-left: auto;
+	justify-content: flex-end;
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+	-webkit-overflow-scrolling: touch;
+	gap: clamp(5px, 0.6vw, 9px);
+	padding: 2px 0;
+}
+.liuli-chips::-webkit-scrollbar { display: none; }
+.liuli-chip { flex: 0 0 auto; height: var(--liuli-chip-h); padding: 0 clamp(8px, 0.75vw, 13px); }
+.liuli-chip { font-size: clamp(11px, 0.75vw, 12.2px); }
+.liuli-spark { width: var(--liuli-spark-w); height: clamp(16px, 2vh, 22px); }
+.liuli-clock { font-size: clamp(11px, 0.78vw, 12.5px); }
+.liuli-themebtn { height: var(--liuli-chip-h); padding: 0 clamp(8px, 0.8vw, 13px); }
+
+/* ---------- 5. 内容区: 流式留白 + 更宽的最大宽度 ---------- */
+.liuli-content {
+	padding: clamp(16px, 1.9vw, 30px) var(--liuli-gutter) clamp(28px, 3.6vw, 48px);
+	max-width: var(--liuli-content-max);
+	width: 100%;
+	min-width: 0;
+}
+.liuli-pagehead {
+	gap: clamp(8px, 1vw, 16px);
+	flex-wrap: wrap;
+	margin-bottom: clamp(14px, 1.5vw, 22px);
+}
+.liuli-pagehead h1 { font-size: var(--liuli-fs-title); }
+.liuli-pagehead .desc { font-size: clamp(11.5px, 0.76vw, 12.8px); }
+
+/* ---------- 6. 卡片网格: auto-fit 取代死断点 ---------- */
+/* minmax(min(Xpx, 100%), 1fr) 是关键: 窄屏时轨道收缩到 100%, 永不溢出 */
+.liuli-grid { gap: clamp(10px, 1.1vw, 18px); }
+.liuli-grid.g4 { grid-template-columns: repeat(auto-fit, minmax(min(235px, 100%), 1fr)); }
+.liuli-grid.g3 { grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr)); }
+.liuli-grid.g2 { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+
+.liuli-card { padding: clamp(14px, 1.3vw, 20px) clamp(15px, 1.4vw, 22px); }
+.liuli-card h3 { font-size: clamp(12.5px, 0.85vw, 13.8px); }
+.liuli-metric .val { font-size: clamp(21px, 1.7vw, 27px); }
+.liuli-metric .sub { font-size: clamp(10.5px, 0.72vw, 11.8px); }
+
+/* ---------- 7. 原生控件: 自适应换行 ---------- */
+.cbi-value { flex-wrap: wrap; gap: clamp(8px, 1vw, 14px); }
+.cbi-value-title { flex: 1 1 clamp(150px, 26%, 260px); min-width: 0; }
+.cbi-value-field { flex: 1 1 clamp(200px, 42%, 460px); min-width: 0; }
+.cbi-map { padding: clamp(15px, 1.5vw, 24px) clamp(16px, 1.6vw, 26px); }
+
+/* 按钮行不被挤出卡片 */
+.cbi-page-actions,
+.cbi-section > .cbi-page-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cbi-button, .btn { max-width: 100%; white-space: nowrap; }
+
+/* ---------- 8. 分级降噪: 按视口宽度逐级收起次要信息 ---------- */
+
+/* <1360px: 收起 CPU / 温度胶囊 */
+@media (max-width: 1360px) {
+	.liuli-chips .optional { display: none; }
+}
+/* <1150px: 收起运行时间, 保留时钟 */
+@media (max-width: 1150px) {
+	.liuli-chips .liuli-chip:nth-last-child(3) { display: none; }
+}
+/* <980px: 侧栏转抽屉 */
+@media (max-width: 980px) {
+	.liuli-sidenav {
+		position: fixed; left: 0; top: 0;
+		width: min(84vw, 320px);
+		flex: none;
+		transform: translateX(-105%);
+		transition: transform .3s cubic-bezier(.4,0,.2,1);
+		z-index: 60;
+		box-shadow: 0 24px 64px rgba(15,23,42,.28);
+	}
+	.liuli-sidenav.open { transform: none; }
+	.liuli-menubtn {
+		display: grid; place-items: center; flex: 0 0 auto;
+		width: 34px; height: 34px; border-radius: 10px;
+		border: 1px solid var(--liuli-line); background: var(--liuli-glass-strong);
+		cursor: pointer;
+	}
+	.liuli-topbar .brand small { display: none; }
+}
+/* <760px: 只留时钟 + 主题按钮 + 指示灯 */
+@media (max-width: 760px) {
+	.liuli-chips .liuli-chip:not(.liuli-clock):not(.liuli-themebtn) { display: none; }
+	.liuli-content { padding: clamp(14px, 3vw, 20px) clamp(12px, 3vw, 18px) 32px; }
+	.liuli-grid.g4, .liuli-grid.g3, .liuli-grid.g2 {
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+	}
+}
+/* <420px: 极窄屏 */
+@media (max-width: 420px) {
+	.liuli-topbar { gap: 8px; }
+	.liuli-topbar .brand b { max-width: 40vw; }
+	.liuli-themebtn .liuli-theme-label { display: none; }
+	.liuli-themebtn { padding: 0 10px; }
+	.liuli-card { border-radius: calc(var(--liuli-radius) * .8); }
+}
+
+/* ---------- 9. 抽屉遮罩 ---------- */
+.liuli-navbackdrop {
+	position: fixed; inset: 0; z-index: 50;
+	background: rgba(15, 23, 42, .38);
+	backdrop-filter: blur(3px);
+	-webkit-backdrop-filter: blur(3px);
+	opacity: 0; pointer-events: none;
+	transition: opacity .28s ease;
+}
+.liuli-navbackdrop.show { opacity: 1; pointer-events: auto; }
+
+/* ---------- 10. 矮屏 / 横屏手机: 压缩纵向节奏 ---------- */
+@media (max-height: 520px) {
+	:root { --liuli-bar-h: 48px; }
+	.liuli-content { padding-top: 12px; padding-bottom: 20px; }
+	.liuli-sidenav .brand { padding-bottom: 8px; }
+}
+
+/* ---------- 11. 超宽屏: 内容居中, 卡片不过度拉伸 ---------- */
+@media (min-width: 2100px) {
+	:root { --liuli-content-max: 1760px; --liuli-gutter: 40px; }
+	.liuli-sidenav { padding-left: 22px; padding-right: 22px; }
+}
+
+/* ---------- 12. 无障碍 / 打印 ---------- */
+@media (prefers-reduced-motion: reduce) {
+	.liuli-sidenav, .liuli-navbackdrop { transition: none; }
+}
+@media print {
+	.liuli-bg, .liuli-sidenav, .liuli-topbar, .liuli-navbackdrop { display: none !important; }
+	.liuli-content { padding: 0; max-width: none; }
+	.liuli-card, .cbi-map { box-shadow: none; break-inside: avoid; }
+}
