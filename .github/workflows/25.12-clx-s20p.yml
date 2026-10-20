@@ -1,15 +1,15 @@
 name: 25.12-clx-s20p-docker
 
 env:
-  DEVICE_NAME: 25.12-clx-s20p
+  DEVICE_NAME: 25.12-clx-s20p-min
   REPO_URL: https://github.com/chasey-dev/immortalwrt-mt798x-rebase
 #  REPO_URL: https://github.com/jameslau-tech/immortalwrt-mt798x-rebase
   REPO_BRANCH: 25.12
   FEEDS_CONF: feeds.conf.default
   #CONFIG_FILE: 25.12/mt7986-clx-s20p.config
-  CONFIG_FILE: 25.12/s20pc.config
-  DIY_P1_SH: 25.12/diy-part1.sh
-  DIY_P2_SH: 25.12/diy-part2.sh
+  CONFIG_FILE: 25.12/s20p-min.config
+  DIY_P1_SH: 25.12/diy-part1-min.sh
+  DIY_P2_SH: 25.12/diy-part2-min.sh
   DIY_P3_SH: diy-partX.sh
   UPLOAD_BIN_DIR: true
   UPLOAD_FIRMWARE: true
