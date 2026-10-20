@@ -493,8 +493,10 @@ return view.extend({
 		]);
 
 		this.rootEl = root;
+		this.navEl = nav;
 		this.buildFilters();
 		this.renderAll();
+		this.setupScrollSpy();
 
 		if (!this.pollFn)
 			this.pollFn = L.bind(this.refresh, this);
@@ -514,6 +516,52 @@ return view.extend({
 			]),
 			EE('div', { 'class': 'll-secbody' }, children)
 		]);
+	},
+
+	/* 滚动时高亮当前所在区块的导航项 (scroll spy) */
+	setupScrollSpy() {
+		if (!this.navEl || !this.rootEl)
+			return;
+
+		const links = {};
+		for (const a of this.navEl.querySelectorAll('a'))
+			links[a.getAttribute('href').replace('#', '')] = a;
+
+		const sections = [];
+		for (const id in links) {
+			const el = this.rootEl.querySelector('#' + id);
+			if (el)
+				sections.push({ id: id, el: el, a: links[id] });
+		}
+		if (!sections.length)
+			return;
+
+		const setActive = (id) => {
+			for (const s of sections)
+				s.a.classList.toggle('active', s.id === id);
+		};
+
+		let pending = false;
+		const onScroll = () => {
+			if (pending)
+				return;
+			pending = true;
+			window.requestAnimationFrame(() => {
+				pending = false;
+				let best = sections[0].id, bestDist = Infinity;
+				for (const s of sections) {
+					const r = s.el.getBoundingClientRect();
+					if (r.bottom < 60)
+						continue;                 /* 已滚过的区块 */
+					const d = Math.abs(r.top - 90);
+					if (d < bestDist) { bestDist = d; best = s.id; }
+				}
+				setActive(best);
+			});
+		};
+
+		window.addEventListener('scroll', onScroll, { passive: true });
+		onScroll();
 	},
 
 	renderAll() {

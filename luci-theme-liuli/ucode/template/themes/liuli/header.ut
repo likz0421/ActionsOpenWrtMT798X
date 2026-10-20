@@ -46,6 +46,14 @@
 				</div>
 			</div>
 			<div class="liuli-nav" id="liuli-nav"></div>
+			<button type="button" class="liuli-collapse" id="liuli-collapse"
+				title="收起 / 展开侧栏" aria-label="收起或展开侧栏">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M14.5 8.5 10 12l4.5 3.5"/>
+					<path d="M4 5v14"/>
+				</svg>
+				<span class="t">收起侧栏</span>
+			</button>
 		</aside>
 
 		<div class="liuli-main">

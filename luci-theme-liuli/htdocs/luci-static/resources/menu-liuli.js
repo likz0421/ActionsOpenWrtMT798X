@@ -97,17 +97,21 @@ return baseclass.extend({
 			return;
 
 		ui.menu.getChildren(mode).forEach(cat => {
-			nav.appendChild(E('div', { 'class': 'group-label' }, [ _(cat.title) ]));
+			nav.appendChild(E('div', { 'class': 'group-label' }, [
+				E('span', { 'class': 't' }, [ _(cat.title) ])
+			]));
 
 			ui.menu.getChildren(cat).forEach(page => {
 				const active = (L.env.dispatchpath[1] === cat.name && L.env.dispatchpath[2] === page.name);
 
 				const a = E('a', {
 					'class': active ? 'active' : '',
-					'href': L.url(mode.name, cat.name, page.name)
-				}, [ _(page.title) ]);
+					'href': L.url(mode.name, cat.name, page.name),
+					'title': _(page.title)
+				});
 
 				a.insertAdjacentHTML('beforeend', liuliIcon(page.title));
+				a.appendChild(E('span', { 'class': 't' }, [ _(page.title) ]));
 				nav.appendChild(a);
 
 				/* 二级页面缩进展示 */
@@ -116,8 +120,9 @@ return baseclass.extend({
 						const subActive = active && L.env.dispatchpath[3] === sub.name;
 						const sa = E('a', {
 							'class': 'sub' + (subActive ? ' active' : ''),
-							'href': L.url(mode.name, cat.name, page.name, sub.name)
-						}, [ _(sub.title) ]);
+							'href': L.url(mode.name, cat.name, page.name, sub.name),
+							'title': _(sub.title)
+						}, [ E('span', { 'class': 't' }, [ _(sub.title) ]) ]);
 						nav.appendChild(sa);
 					});
 				}

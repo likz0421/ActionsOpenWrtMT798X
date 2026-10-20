@@ -980,7 +980,7 @@ input[type="text"], input[type="password"], input[type="number"], select, textar
 }
 /* <760px: 只留时钟 + 主题按钮 + 指示灯 */
 @media (max-width: 760px) {
-	.liuli-chips .liuli-chip:not(.liuli-clock):not(.liuli-themebtn) { display: none; }
+	.liuli-chips .liuli-chip:not(.liuli-clock):not(.liuli-themebtn):not(#liuli-chip-clients) { display: none; }
 	.liuli-content { padding: clamp(14px, 3vw, 20px) clamp(12px, 3vw, 18px) 32px; }
 	.liuli-grid.g4, .liuli-grid.g3, .liuli-grid.g2 {
 		grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
@@ -1038,4 +1038,235 @@ input[type="text"], input[type="password"], input[type="number"], select, textar
 }
 @media (max-width: 420px) {
 	.liuli-chips #liuli-chip-clients .dot { width: 6px; height: 6px; }
+}
+
+/* ============================================================
+   视觉与交互设计层 —「呼吸 · 有序」
+   1. 统一动效语言   2. 滚动进入节奏   3. 侧栏折叠
+   4. 顶栏滚动紧凑态 5. 移动端底部栏   6. 无障碍焦点
+   ============================================================ */
+
+/* ---------- 1. 统一动效语言 ---------- */
+:root {
+	--liuli-ease: cubic-bezier(.22, .85, .28, 1);
+	--liuli-dur: .28s;
+	--liuli-dur-fast: .16s;
+	--liuli-lift: -2px;
+}
+
+/* 所有可交互元素的过渡统一到同一条曲线与时长 */
+.liuli-nav a,
+.liuli-chip,
+.liuli-btn,
+.liuli-card,
+.liuli-themebtn,
+.liuli-collapse,
+.cbi-button,
+.btn,
+.cbi-map,
+#maincontent a {
+	transition:
+		transform var(--liuli-dur) var(--liuli-ease),
+		box-shadow var(--liuli-dur) var(--liuli-ease),
+		background-color var(--liuli-dur) var(--liuli-ease),
+		border-color var(--liuli-dur) var(--liuli-ease),
+		color var(--liuli-dur-fast) var(--liuli-ease);
+}
+
+/* 统一的「抬起」反馈: 一律 -2px + 阴影加深, 不做其他花活 */
+.liuli-card:hover,
+.liuli-btn:hover,
+.cbi-map:hover {
+	transform: translateY(var(--liuli-lift));
+	box-shadow: var(--liuli-shadow-lg);
+}
+.liuli-nav a:hover {
+	transform: translateX(3px);
+}
+.cbi-button:hover, .btn:hover { transform: translateY(-1px); }
+
+/* 按压反馈 */
+.liuli-btn:active,
+.cbi-button:active,
+.btn:active,
+.liuli-nav a:active,
+.liuli-themebtn:active,
+.liuli-collapse:active,
+.liuli-filter:active { transform: translateY(0) scale(.985); }
+
+/* ---------- 2. 滚动进入节奏 ---------- */
+/* JS 给进入视口的元素加 .liuli-in; 未进入时轻微下沉且透明 */
+.liuli-reveal {
+	opacity: 0;
+	transform: translateY(14px) scale(.995);
+	transition: opacity .5s var(--liuli-ease), transform .5s var(--liuli-ease);
+	will-change: opacity, transform;
+}
+.liuli-reveal.liuli-in {
+	opacity: 1;
+	transform: none;
+}
+
+/* ---------- 6. 无障碍: 键盘焦点环 ---------- */
+.liuli-nav a:focus-visible,
+.liuli-chip:focus-visible,
+.liuli-btn:focus-visible,
+.liuli-themebtn:focus-visible,
+.liuli-collapse:focus-visible,
+#maincontent a:focus-visible,
+.cbi-button:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+	outline: 2px solid var(--liuli-primary);
+	outline-offset: 2px;
+	border-radius: 8px;
+}
+
+/* ---------- 3. 侧栏折叠 ---------- */
+.liuli-collapse {
+	margin-top: auto;
+	flex: 0 0 auto;
+	display: flex; align-items: center; gap: 10px;
+	width: 100%;
+	padding: 9px 12px;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--liuli-ink-3);
+	font-family: inherit; font-size: 12px; font-weight: 650;
+	cursor: pointer;
+	overflow: hidden;
+}
+.liuli-collapse:hover { background: rgba(148,163,184,.14); color: var(--liuli-ink); }
+.liuli-collapse svg { width: 17px; height: 17px; flex: 0 0 17px; }
+.liuli-collapse .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 折叠态: 侧栏收窄成图标条 */
+body.liuli-nav-collapsed .liuli-sidenav {
+	width: 64px;
+	flex: 0 0 64px;
+	padding-left: 8px;
+	padding-right: 8px;
+	overflow-x: hidden;
+}
+body.liuli-nav-collapsed .liuli-sidenav .brand { justify-content: flex-start; padding-left: 2px; }
+body.liuli-nav-collapsed .liuli-sidenav .brand > div { display: none; }
+body.liuli-nav-collapsed .liuli-sidenav .brand .mark { width: 34px; height: 34px; flex: 0 0 34px; }
+
+/* 文字隐藏, 只留图标并居中 */
+body.liuli-nav-collapsed .liuli-nav .group-label {
+	height: 1px; margin: 10px 8px; padding: 0;
+	background: rgba(148,163,184,.28); overflow: hidden;
+}
+body.liuli-nav-collapsed .liuli-nav .group-label .t { display: none; }
+body.liuli-nav-collapsed .liuli-nav a {
+	justify-content: center;
+	padding-left: 0; padding-right: 0;
+	border-radius: 10px;
+}
+body.liuli-nav-collapsed .liuli-nav a .t,
+body.liuli-nav-collapsed .liuli-nav a.sub .t { display: none; }
+body.liuli-nav-collapsed .liuli-nav a svg { margin: 0; }
+body.liuli-nav-collapsed .liuli-nav a.sub { justify-content: center; padding-left: 0; }
+body.liuli-nav-collapsed .liuli-nav { gap: 2px; }
+body.liuli-nav-collapsed .liuli-collapse { justify-content: center; padding-left: 0; padding-right: 0; }
+body.liuli-nav-collapsed .liuli-collapse .t { display: none; }
+body.liuli-nav-collapsed .liuli-collapse svg { transform: rotate(180deg); }
+
+/* 折叠后菜单项只显示图标, hover 时弹出文字提示 */
+body.liuli-nav-collapsed .liuli-nav a { position: relative; }
+body.liuli-nav-collapsed .liuli-nav a:hover::after {
+	content: attr(title);
+	position: absolute; left: calc(100% + 10px); top: 50%;
+	transform: translateY(-50%);
+	z-index: 70;
+	padding: 6px 11px; border-radius: 9px;
+	background: rgba(15, 23, 42, .92);
+	color: #fff; font-size: 12px; font-weight: 600;
+	white-space: nowrap; pointer-events: none;
+	box-shadow: 0 8px 24px rgba(15,23,42,.28);
+	animation: liuli-fade .16s var(--liuli-ease) both;
+}
+
+/* 移动端抽屉状态下不应用折叠宽度 */
+@media (max-width: 980px) {
+	body.liuli-nav-collapsed .liuli-sidenav { width: min(84vw, 320px); flex: none; }
+	body.liuli-nav-collapsed .liuli-nav a { justify-content: flex-start; padding-left: clamp(9px,.8vw,12px); padding-right: clamp(9px,.8vw,12px); }
+	body.liuli-nav-collapsed .liuli-nav a .t,
+	body.liuli-nav-collapsed .liuli-collapse .t { display: inline; }
+	body.liuli-nav-collapsed .liuli-sidenav .brand > div { display: block; }
+	body.liuli-nav-collapsed .liuli-collapse svg { transform: none; }
+	body.liuli-nav-collapsed .liuli-nav a:hover::after { display: none; }
+	body.liuli-nav-collapsed .liuli-nav .group-label { height: auto; margin: 0; background: none; }
+	body.liuli-nav-collapsed .liuli-nav .group-label .t { display: inline; }
+}
+
+/* ---------- 4. 顶栏滚动紧凑态 ---------- */
+body.liuli-scrolled .liuli-topbar {
+	height: calc(var(--liuli-bar-h) - 8px);
+	background: var(--liuli-glass-strong);
+	box-shadow: 0 6px 22px rgba(30,41,59,.10);
+	border-bottom-color: rgba(148,163,184,.28);
+}
+html[data-liuli-theme="dark"] body.liuli-scrolled .liuli-topbar {
+	background: rgba(20, 26, 41, .92);
+	box-shadow: 0 6px 22px rgba(0,0,0,.34);
+}
+body.liuli-scrolled .liuli-topbar .brand small { display: none; }
+body.liuli-scrolled .liuli-chip { height: calc(var(--liuli-chip-h) - 4px); }
+
+/* ---------- 5. 移动端底部快捷栏 ---------- */
+.liuli-tabbar {
+	display: none;
+	position: fixed; left: 0; right: 0; bottom: 0;
+	z-index: 55;
+	padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+	background: var(--liuli-glass-strong);
+	backdrop-filter: var(--liuli-blur);
+	-webkit-backdrop-filter: var(--liuli-blur);
+	border-top: 1px solid var(--liuli-line);
+	box-shadow: 0 -6px 24px rgba(30,41,59,.10);
+}
+.liuli-tabbar > a {
+	flex: 1 1 0; min-width: 0;
+	display: flex; flex-direction: column; align-items: center; justify-content: center;
+	gap: 3px; padding: 5px 2px;
+	border-radius: 12px;
+	color: var(--liuli-ink-3);
+	text-decoration: none;
+	font-size: 10.5px; font-weight: 650;
+	transition: color var(--liuli-dur-fast) var(--liuli-ease),
+		background-color var(--liuli-dur-fast) var(--liuli-ease);
+}
+.liuli-tabbar > a svg { width: 19px; height: 19px; }
+.liuli-tabbar > a span {
+	max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.liuli-tabbar > a.active { color: var(--liuli-primary); background: rgba(91,124,250,.10); }
+.liuli-tabbar > a:active { background: rgba(148,163,184,.16); }
+html[data-liuli-theme="dark"] .liuli-tabbar > a.active { color: var(--liuli-primary); background: rgba(147,165,255,.16); }
+
+@media (max-width: 980px) {
+	.liuli-tabbar { display: flex; }
+	.liuli-content { padding-bottom: calc(74px + env(safe-area-inset-bottom, 0px)); }
+	.liuli-footer { padding-bottom: 74px; }
+}
+/* 横屏矮屏时隐藏底部栏, 避免占用已经很紧张的纵向空间 */
+@media (max-height: 460px) and (orientation: landscape) {
+	.liuli-tabbar { display: none; }
+	.liuli-content { padding-bottom: 20px; }
+}
+
+/* ---------- 尊重减弱动效偏好 ---------- */
+@media (prefers-reduced-motion: reduce) {
+	.liuli-reveal { opacity: 1; transform: none; transition: none; }
+	.liuli-nav a:hover,
+	.liuli-card:hover,
+	.liuli-btn:hover,
+	.cbi-map:hover,
+	.cbi-button:hover,
+	.btn:hover { transform: none; }
+	.liuli-tabbar > a { transition: none; }
 }
