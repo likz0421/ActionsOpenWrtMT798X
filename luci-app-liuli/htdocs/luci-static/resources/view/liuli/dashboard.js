@@ -767,8 +767,12 @@ return view.extend({
 				EE('i', { 'style': 'background:' + palette[i % palette.length] }),
 				k, EE('b', {}, [ String(groups[k]) ])
 			]))),
-			EE('div', { 'class': 'll-memmeta' }, [
-				'共 ' + total + ' 台 · 在线 ' + dev.online + ' 台'
+			EE('div', { 'class': 'll-comp-stats' }, [
+				EE('span', {}, [ '总计 ', EE('b', {}, [ String(total) ]), ' 台' ]),
+				EE('span', {}, [ '在线 ', EE('b', {}, [ String(dev.online) ]) ]),
+				EE('span', {}, [ '离线 ', EE('b', {}, [ String(total - dev.online) ]) ]),
+				EE('span', {}, [ '无线 ', EE('b', {}, [ String(dev.list.filter((d) => d.wireless).length) ]) ]),
+				EE('span', {}, [ '有线 ', EE('b', {}, [ String(dev.list.filter((d) => !d.wireless).length) ]) ])
 			])
 		]);
 	},

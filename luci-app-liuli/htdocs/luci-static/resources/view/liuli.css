@@ -838,3 +838,25 @@ html[data-liuli-theme="dark"] .liuli-dash .ll-hitem .b > i.bad { background: lin
 	.liuli-dash .ll-rank-row .rk-bar { display: none; }
 	.liuli-dash .ll-hitem { grid-template-columns: 48px minmax(30px, 1fr) 60px; }
 }
+
+/* ---------- 排行卡: 名字列加宽, 条列收窄 (1280 下不再截断) ---------- */
+.liuli-dash .ll-rank-row {
+	grid-template-columns: 18px minmax(78px, 1.35fr) minmax(36px, 1.1fr) 66px;
+}
+
+/* ---------- 设备构成卡: 补一行在线/无线统计, 撑满卡片高度 ---------- */
+.liuli-dash .ll-comp-stats {
+	display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+}
+.liuli-dash .ll-comp-stats > span {
+	font-size: 10.5px; font-weight: 650; color: var(--d-ink-2);
+	background: rgba(148,163,184,.14); border-radius: 8px; padding: 3px 9px;
+	font-variant-numeric: tabular-nums;
+}
+.liuli-dash .ll-comp-stats > span b { color: var(--d-ink); font-weight: 750; }
+html[data-liuli-theme="dark"] .liuli-dash .ll-comp-stats > span { background: rgba(148,163,184,.14); }
+
+/* 分析卡在窄屏自动堆叠时, 让内容顶部对齐而不是被拉伸 */
+@media (max-width: 900px) {
+	.liuli-dash .ll-insight { align-items: start; }
+}

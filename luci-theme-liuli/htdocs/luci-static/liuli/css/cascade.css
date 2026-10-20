@@ -1028,3 +1028,14 @@ input[type="text"], input[type="password"], input[type="number"], select, textar
 	.liuli-content { padding: 0; max-width: none; }
 	.liuli-card, .cbi-map { box-shadow: none; break-inside: avoid; }
 }
+
+/* ---------- 13. 窄屏顶栏: 保留"在线设备"这一核心信息 ---------- */
+@media (max-width: 760px) {
+	/* 之前把所有非时钟芯片都隐藏了, 手机上看不到任何实时状态; 改为保留在线设备 */
+	.liuli-chips .liuli-chip:not(.liuli-clock):not(.liuli-themebtn):not(#liuli-chip-clients) { display: none; }
+	.liuli-chips #liuli-chip-clients .lbl { display: none; }
+	.liuli-chips #liuli-chip-clients { padding: 0 10px; gap: 5px; }
+}
+@media (max-width: 420px) {
+	.liuli-chips #liuli-chip-clients .dot { width: 6px; height: 6px; }
+}

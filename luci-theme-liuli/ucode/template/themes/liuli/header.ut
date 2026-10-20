@@ -66,7 +66,7 @@
 
 				<div class="liuli-chips">
 					<span class="liuli-chip" id="liuli-chip-clients" title="在线客户端">
-						<span class="dot"></span>在线设备 <b id="liuli-clients">—</b>
+						<span class="dot"></span><span class="lbl">在线设备</span> <b id="liuli-clients">—</b>
 					</span>
 					<span class="liuli-chip" title="运行时间">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
