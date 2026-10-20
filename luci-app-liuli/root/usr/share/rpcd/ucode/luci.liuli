@@ -1,0 +1,255 @@
+// 琉璃看板 — Liuli device dashboard backend (thin data layer)
+// Reads DHCP leases / ARP / wireless assoclist / nftables per-device
+// byte counters and returns them raw; the view does identification,
+// merging and ranking.
+//
+// Copyright 2026 likz0421
+// Licensed under the Apache License 2.0
+
+'use strict';
+
+import { popen, readfile, writefile, access } from 'fs';
+import { connect } from 'ubus';
+
+const STATE_FILE = '/var/run/liuli-daily.json';
+
+/* ---------- helpers ---------- */
+
+function sh(cmd) {
+	const fd = popen(cmd + ' 2>/dev/null', 'r');
+	if (!fd)
+		return null;
+	const out = fd.read('all');
+	fd.close();
+	return out;
+}
+
+function today() {
+	const out = sh('date +%F');
+	return out ? trim(out) : '';
+}
+
+function read_json(path) {
+	if (!access(path))
+		return null;
+	try {
+		const s = readfile(path);
+		if (s)
+			return json(s);
+	} catch (e) {}
+	return null;
+}
+
+function is_ipv4(s) {
+	return type(s) == 'string' && match(s, /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) != null;
+}
+
+/* ---------- 原始数据读取 ---------- */
+
+function readLeases() {
+	const leases = [];
+	const s = readfile('/tmp/dhcp.leases');
+	if (!s)
+		return leases;
+	for (let line of split(s, '\n')) {
+		const f = split(trim(line), /[ \t]+/);
+		if (length(f) < 4)
+			continue;
+		leases.push({
+			mac: f[1],
+			ip: f[2],
+			hostname: (f[3] != '*') ? f[3] : null,
+			expiry: f[0]
+		});
+	}
+	return leases;
+}
+
+function readArp() {
+	const arp = [];
+	const s = readfile('/proc/net/arp');
+	if (!s)
+		return arp;
+	for (let line of split(s, '\n')) {
+		const f = split(trim(line), /[ \t]+/);
+		if (length(f) < 6)
+			continue;
+		if (f[2] != '0x2' || f[3] == '00:00:00:00:00:00')
+			continue;
+		arp.push({ mac: f[3], ip: f[0] });
+	}
+	return arp;
+}
+
+function readStations() {
+	const stations = [];
+	const ubus = connect();
+	let radios = {};
+	try { radios = ubus.call('luci-rpc', 'getWirelessDevices') ?? {}; } catch (e) {}
+
+	for (let name, radio in radios) {
+		const ifaces = radio?.interfaces ?? [];
+		for (let ifc of ifaces) {
+			const dev = (type(ifc) == 'string') ? ifc : (ifc?.ifname ?? null);
+			if (!dev)
+				continue;
+			let res = null;
+			try { res = ubus.call('iwinfo', 'assoclist', { device: dev }); } catch (e) {}
+			for (let st of (res?.results ?? [])) {
+				if (st?.mac)
+					stations.push({
+						mac: st.mac,
+						signal: (st.signal != null) ? st.signal : null,
+						noise: (st.noise != null) ? st.noise : null,
+						iface: dev
+					});
+			}
+		}
+	}
+	return stations;
+}
+
+function selfMacs() {
+	const macs = [];
+	const ubus = connect();
+	let devs = {};
+	try { devs = ubus.call('network.device', 'status') ?? {}; } catch (e) {}
+	for (let name, dev in devs)
+		if (dev?.macaddr)
+			macs.push(dev.macaddr);
+	return macs;
+}
+
+/* ---------- nftables 每设备流量 ---------- */
+
+function listRules() {
+	const out = sh('nft -j list chain inet liuli_account device_traffic');
+	const rules = [];
+	if (!out)
+		return rules;
+	let data = null;
+	try { data = json(out); } catch (e) { return rules; }
+
+	for (let item of (data?.nftables ?? [])) {
+		const rule = item?.rule;
+		if (!rule?.expr)
+			continue;
+		let dir = null, ip = null, bytes = 0;
+		for (let ex of rule.expr) {
+			const field = ex?.match?.left?.payload?.field;
+			if (field)
+				dir = field;
+			if (ex?.match?.right)
+				ip = ex.match.right;
+			if (ex?.counter)
+				bytes = ex.counter.bytes ?? 0;
+		}
+		if (dir && ip)
+			rules.push({ dir: dir, ip: ip, bytes: bytes, handle: rule.handle });
+	}
+	return rules;
+}
+
+function syncAccounting(ipList) {
+	if (!sh('nft list table inet liuli_account'))
+		sh("nft add table inet liuli_account");
+	if (!sh('nft list chain inet liuli_account device_traffic'))
+		sh("nft 'add chain inet liuli_account device_traffic { type filter hook forward priority filter + 5; policy accept; }'");
+
+	const rules = listRules();
+	const present = {};
+	for (let r of rules)
+		if (r.dir == 'saddr')
+			present[r.ip] = 1;
+
+	const live = {};
+	for (let ip of ipList) {
+		if (!is_ipv4(ip))
+			continue;
+		live[ip] = 1;
+		if (!present[ip]) {
+			sh(`nft add rule inet liuli_account device_traffic ip saddr ${ip} counter`);
+			sh(`nft add rule inet liuli_account device_traffic ip daddr ${ip} counter`);
+		}
+	}
+
+	for (let r of rules)
+		if (!live[r.ip])
+			sh(`nft delete rule inet liuli_account device_traffic handle ${r.handle}`);
+}
+
+function todayTraffic() {
+	const state = read_json(STATE_FILE) ?? { date: '', baseline: {} };
+	const rules = listRules();
+	const counters = {};
+
+	for (let r of rules) {
+		counters[r.ip] = counters[r.ip] ?? { rx: 0, tx: 0 };
+		if (r.dir == 'saddr')
+			counters[r.ip].rx = r.bytes;
+		else if (r.dir == 'daddr')
+			counters[r.ip].tx = r.bytes;
+	}
+
+	const date = today();
+	const result = {};
+
+	if (state.date != date) {
+		const baseline = {};
+		for (let ip in counters)
+			baseline[ip] = { rx: counters[ip].rx, tx: counters[ip].tx };
+		try {
+			writefile(STATE_FILE, sprintf('%J', { date: date, baseline: baseline }));
+		} catch (e) {}
+		state.baseline = baseline;
+		state.date = date;
+	}
+
+	const base = (state.baseline && type(state.baseline) == 'object') ? state.baseline : {};
+
+	for (let ip in counters) {
+		const b = base[ip] ?? { rx: 0, tx: 0 };
+		result[ip] = {
+			rx: (counters[ip].rx > b.rx) ? (counters[ip].rx - b.rx) : 0,
+			tx: (counters[ip].tx > b.tx) ? (counters[ip].tx - b.tx) : 0
+		};
+	}
+	return result;
+}
+
+/* ---------- RPC ---------- */
+
+const methods = {
+	getDevices: {
+		call: function(request) {
+			const leases = readLeases();
+			const arp = readArp();
+			const stations = readStations();
+
+			const ips = {};
+			for (let l of leases)
+				if (is_ipv4(l.ip))
+					ips[l.ip] = 1;
+			for (let a of arp)
+				if (is_ipv4(a.ip))
+					ips[a.ip] = 1;
+			const ipList = [];
+			for (let ip in ips)
+				ipList.push(ip);
+
+			syncAccounting(ipList);
+			const traffic = todayTraffic();
+
+			return {
+				leases: leases,
+				arp: arp,
+				stations: stations,
+				traffic: traffic,
+				self_macs: selfMacs(),
+				date: today()
+			};
+		}
+	}
+};
+
+return { liuli: methods };

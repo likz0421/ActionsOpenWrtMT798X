@@ -1,0 +1,213 @@
+/* 琉璃看板 — Liuli dashboard styles (light glassmorphism) */
+
+.liuli-dash {
+  --d-primary: #5b7cfa;
+  --d-primary-2: #8b5cf6;
+  --d-ink: #1e293b;
+  --d-ink-2: #475569;
+  --d-ink-3: #94a3b8;
+  --d-glass: rgba(255, 255, 255, 0.62);
+  --d-glass-strong: rgba(255, 255, 255, 0.78);
+  --d-line: rgba(255, 255, 255, 0.85);
+  --d-shadow: 0 8px 32px rgba(30, 41, 59, 0.10), 0 2px 8px rgba(30, 41, 59, 0.06);
+  --d-shadow-lg: 0 24px 64px rgba(30, 41, 59, 0.16), 0 4px 16px rgba(30, 41, 59, 0.08);
+  --d-blur: blur(22px) saturate(1.55);
+  --d-radius: 18px;
+  --d-mono: "SF Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  color: var(--d-ink);
+}
+
+.liuli-dash .liuli-pagehead {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 20px; gap: 12px; flex-wrap: wrap;
+}
+.liuli-dash h2 {
+  margin: 0; font-size: 22px; font-weight: 750; letter-spacing: -.01em;
+  background: linear-gradient(120deg, #1e293b 30%, #4f46e5 90%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.liuli-dash .desc { color: var(--d-ink-3); font-size: 12.5px; margin-top: 4px; }
+
+/* ---- 汇总卡片 ---- */
+.liuli-dash .liuli-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px;
+}
+@media (max-width: 900px) { .liuli-dash .liuli-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .liuli-dash .liuli-grid { grid-template-columns: 1fr; } }
+
+.liuli-dash .liuli-card {
+  background: var(--d-glass);
+  backdrop-filter: var(--d-blur);
+  -webkit-backdrop-filter: var(--d-blur);
+  border: 1px solid var(--d-line);
+  border-radius: var(--d-radius);
+  box-shadow: var(--d-shadow);
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+  transition: transform .25s, box-shadow .25s;
+  animation: liuli-dash-fade .5s cubic-bezier(.2,.8,.2,1) both;
+}
+.liuli-dash .liuli-card::before {
+  content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent);
+}
+.liuli-dash .liuli-card:hover { box-shadow: var(--d-shadow-lg); transform: translateY(-2px); }
+@keyframes liuli-dash-fade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+.liuli-dash .liuli-metric .top {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--d-ink-2); font-size: 12.5px; font-weight: 650;
+}
+.liuli-dash .liuli-metric .top .ico {
+  width: 26px; height: 26px; border-radius: 8px;
+  display: inline-grid; place-items: center;
+  background: linear-gradient(135deg, rgba(91,124,250,.14), rgba(139,92,246,.12));
+  border: 1px solid rgba(91,124,250,.22);
+}
+.liuli-dash .liuli-metric .top .ico svg { width: 14px; height: 14px; color: var(--d-primary); }
+.liuli-dash .liuli-metric .val {
+  font-size: 26px; font-weight: 760; letter-spacing: -.02em; margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.liuli-dash .liuli-metric .val small { font-size: 12px; color: var(--d-ink-3); font-weight: 600; margin-left: 3px; }
+
+/* ---- TOP1 英雄卡 ---- */
+.liuli-dash .liuli-hero {
+  display: flex; align-items: center; gap: 18px;
+  background: linear-gradient(135deg, rgba(91,124,250,.20), rgba(139,92,246,.16)), var(--d-glass-strong);
+  backdrop-filter: var(--d-blur);
+  -webkit-backdrop-filter: var(--d-blur);
+  border: 1px solid rgba(91,124,250,.35);
+  border-radius: var(--d-radius);
+  box-shadow: var(--d-shadow-lg);
+  padding: 18px 22px; margin-bottom: 16px;
+  position: relative; overflow: hidden;
+  animation: liuli-dash-fade .55s cubic-bezier(.2,.8,.2,1) both;
+}
+.liuli-dash .liuli-hero::before {
+  content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,1), transparent);
+}
+.liuli-dash .liuli-hero-icon {
+  width: 56px; height: 56px; border-radius: 16px; flex: 0 0 56px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--d-primary), var(--d-primary-2));
+  box-shadow: 0 8px 24px rgba(99,102,241,.42), inset 0 1px 0 rgba(255,255,255,.4);
+  color: #fff;
+}
+.liuli-dash .liuli-hero-icon svg { width: 28px; height: 28px; }
+.liuli-dash .liuli-hero-body { flex: 1; min-width: 0; }
+.liuli-dash .liuli-hero-title {
+  font-size: 11px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase;
+  color: #4f46e5;
+}
+.liuli-dash .liuli-hero-name {
+  font-size: 20px; font-weight: 780; letter-spacing: -.01em; margin: 3px 0 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.liuli-dash .liuli-hero-meta { font-size: 12px; color: var(--d-ink-2); }
+.liuli-dash .liuli-hero-traffic {
+  margin-top: 8px; font-size: 15px; font-weight: 720;
+  font-variant-numeric: tabular-nums; font-family: var(--d-mono); color: var(--d-ink);
+}
+.liuli-dash .liuli-hero-traffic .sep { color: var(--d-ink-3); margin: 0 6px; font-weight: 400; }
+.liuli-dash .liuli-hero-badge {
+  flex: 0 0 auto;
+  font-size: 13px; font-weight: 800; letter-spacing: .04em;
+  color: #fff; padding: 6px 14px; border-radius: 99px;
+  background: linear-gradient(135deg, var(--d-primary), var(--d-primary-2));
+  box-shadow: 0 6px 18px rgba(99,102,241,.45);
+}
+
+/* ---- 筛选条 ---- */
+.liuli-dash .liuli-filters {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.liuli-dash .liuli-filter {
+  border: 1px solid var(--d-line); cursor: pointer;
+  background: var(--d-glass-strong); color: var(--d-ink-2);
+  backdrop-filter: blur(10px);
+  height: 30px; padding: 0 14px; border-radius: 99px;
+  font-size: 12px; font-weight: 650;
+  font-family: inherit;
+  transition: all .2s;
+}
+.liuli-dash .liuli-filter:hover { color: var(--d-ink); transform: translateY(-1px); }
+.liuli-dash .liuli-filter.active {
+  background: linear-gradient(135deg, rgba(91,124,250,.18), rgba(139,92,246,.16));
+  border-color: rgba(91,124,250,.4); color: #3b4fd8;
+  box-shadow: 0 4px 14px rgba(99,102,241,.16), inset 0 1px 0 rgba(255,255,255,.7);
+}
+
+/* ---- 设备卡片 ---- */
+.liuli-dash .liuli-devices {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px;
+}
+.liuli-dash .liuli-device { padding: 16px 18px; }
+.liuli-dash .liuli-device.offline { opacity: .62; }
+
+.liuli-dash .d-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.liuli-dash .d-icon {
+  width: 42px; height: 42px; border-radius: 12px; flex: 0 0 42px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, rgba(91,124,250,.13), rgba(139,92,246,.11));
+  border: 1px solid rgba(91,124,250,.2);
+  color: var(--d-primary);
+}
+.liuli-dash .d-icon svg { width: 21px; height: 21px; }
+.liuli-dash .d-title { flex: 1; min-width: 0; }
+.liuli-dash .d-name {
+  font-size: 14px; font-weight: 720; letter-spacing: -.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.liuli-dash .d-meta { font-size: 11.5px; color: var(--d-ink-3); margin-top: 1px; }
+.liuli-dash .d-rank {
+  flex: 0 0 auto; font-size: 11px; font-weight: 750;
+  color: var(--d-ink-2); background: rgba(148,163,184,.16);
+  border-radius: 99px; padding: 2px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.liuli-dash .d-rank.top {
+  color: #fff;
+  background: linear-gradient(135deg, var(--d-primary), var(--d-primary-2));
+  box-shadow: 0 3px 10px rgba(99,102,241,.4);
+}
+
+.liuli-dash .d-rows { display: flex; flex-direction: column; gap: 5px; }
+.liuli-dash .d-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 12px; padding: 3px 0;
+  border-bottom: 1px dashed rgba(148,163,184,.14);
+}
+.liuli-dash .d-row:last-child { border-bottom: none; }
+.liuli-dash .d-row .k { color: var(--d-ink-3); flex: 0 0 auto; }
+.liuli-dash .d-row .v { color: var(--d-ink-2); text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.liuli-dash .d-row .v.mono { font-family: var(--d-mono); font-size: 11.5px; }
+
+.liuli-dash .d-status {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 10px; font-size: 11.5px; font-weight: 650; color: var(--d-ink-2);
+}
+.liuli-dash .d-status .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #cbd5e1;
+}
+.liuli-dash .d-status .dot.on {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34,197,94,.18);
+  animation: liuli-dot-pulse 2.2s ease-in-out infinite;
+}
+@keyframes liuli-dot-pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+
+.liuli-dash .liuli-note {
+  margin-top: 18px; font-size: 11px; color: var(--d-ink-3); text-align: center;
+}
+
+/* 无主题时也可用的兜底 (bootstrap 环境下) */
+.liuli-dash .cbi-button-add {
+  height: 34px; padding: 0 15px; border-radius: 10px;
+  font-size: 12.5px; font-weight: 650; cursor: pointer;
+}

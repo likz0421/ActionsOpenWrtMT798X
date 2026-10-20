@@ -1,0 +1,121 @@
+name: build-theme-liuli
+
+env:
+  REPO_URL: https://github.com/chasey-dev/immortalwrt-mt798x-rebase
+  REPO_BRANCH: 25.12
+  TZ: Asia/Shanghai
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v5
+
+    - name: Init build environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+          /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/lib/jvm
+        sudo docker image prune --all --force
+        sudo swapoff -a && sudo rm -f /mnt/swapfile
+        sudo fallocate -l 12G /mnt/swapfile
+        sudo chmod 600 /mnt/swapfile
+        sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile
+        sudo -E apt-get -yqq purge firefox snapd
+        sudo -E apt-get -yqq update
+        sudo -E apt-get -yqq full-upgrade
+        sudo -E apt-get -yqq install build-essential clang llvm flex bison \
+          libssl-dev libelf-dev bc python3 xz-utils tar dos2unix libfuse-dev zstd
+        sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+        sudo -E apt-get -yqq autoremove --purge
+        sudo -E apt-get -yqq clean
+        sudo mkdir -p /workdir
+        sudo chown "$USER":"$USER" /workdir
+
+    - name: Clone source code
+      working-directory: /workdir
+      run: |
+        git clone "$REPO_URL" -b "$REPO_BRANCH" --single-branch --depth=1 openwrt
+        ln -sf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
+
+    - name: Update & install feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Install theme & dashboard packages
+      run: |
+        mkdir -p openwrt/package/liuli-theme openwrt/package/luci-app-liuli
+        cp -r luci-theme-liuli/. openwrt/package/liuli-theme/
+        cp -r luci-app-liuli/. openwrt/package/luci-app-liuli/
+        ls openwrt/package/liuli-theme openwrt/package/luci-app-liuli
+
+    - name: Toolchain cache key
+      id: cache-key
+      run: |
+        cd openwrt
+        cat > .config <<'EOF'
+        CONFIG_TARGET_mediatek=y
+        CONFIG_TARGET_mediatek_filogic=y
+        CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_clx_s20p=y
+        CONFIG_PACKAGE_luci-theme-liuli=y
+        CONFIG_PACKAGE_luci-app-liuli=y
+        EOF
+        make defconfig 1>/dev/null 2>&1
+
+        TARGET=$(grep '^CONFIG_TARGET_BOARD=' .config | cut -d'"' -f2)
+        SUBTARGET=$(grep '^CONFIG_TARGET_SUBTARGET=' .config | cut -d'"' -f2)
+        TOOLS_HASH=$(find tools toolchain -type f \( -name "Makefile" -o -name "*.mk" \) \
+          -exec md5sum {} + 2>/dev/null | sort | md5sum | cut -d' ' -f1)
+
+        echo "CACHE_KEY=toolchain-${TARGET}-${SUBTARGET}-${TOOLS_HASH:0:16}" >> "$GITHUB_OUTPUT"
+        echo "CACHE_PREFIX=toolchain-${TARGET}-${SUBTARGET}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore toolchain cache
+      uses: actions/cache/restore@v5
+      id: cache-restore
+      with:
+        path: |
+          /workdir/openwrt/staging_dir/host*
+          /workdir/openwrt/staging_dir/tool*
+        key: ${{ steps.cache-key.outputs.CACHE_KEY }}
+
+    - name: Handle toolchain (if cache miss)
+      if: steps.cache-restore.outputs.cache-hit != 'true'
+      run: |
+        cd openwrt
+        make tools/install -j"$(nproc)" || make tools/install -j1 V=s
+        make toolchain/install -j"$(nproc)" || make toolchain/install -j1 V=s
+        sed -i 's/ $(tool.*\/stamp-compile)//' Makefile
+
+    - name: Compile theme + dashboard
+      run: |
+        cd openwrt
+        make defconfig
+        make package/luci-theme-liuli/compile -j"$(nproc)" || make package/luci-theme-liuli/compile -j1 V=s
+        make package/luci-app-liuli/compile -j"$(nproc)" || make package/luci-app-liuli/compile -j1 V=s
+        find bin -name 'luci*liuli*' -exec ls -la {} \;
+
+    - name: Collect packages
+      run: |
+        cd openwrt
+        mkdir -p "$GITHUB_WORKSPACE/out"
+        find bin -name 'luci*liuli*' -exec cp {} "$GITHUB_WORKSPACE/out/" \;
+        ls -la "$GITHUB_WORKSPACE/out"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v5
+      with:
+        name: luci-theme-liuli
+        path: out/*

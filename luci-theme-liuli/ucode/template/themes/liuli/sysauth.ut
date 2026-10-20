@@ -1,0 +1,68 @@
+{#
+	琉璃 Liuli — LuCI glassmorphism theme
+	Login page (sysauth): frosted glass card on gradient light background.
+-#}
+
+{%
+	const boardinfo = ubus.call('system', 'board');
+	const hostname = striptags(boardinfo?.hostname ?? '?');
+	const distname = version?.distname ?? 'ImmortalWrt';
+	const distver = version?.distversion ?? '';
+
+	http.prepare_content('text/html; charset=UTF-8');
+-%}
+<!DOCTYPE html>
+<html lang="{{ dispatcher.lang }}">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="darkreader-lock">
+		<meta name="robots" content="noindex, nofollow">
+		<title>{{ hostname }} - LuCI</title>
+		<link rel="stylesheet" href="{{ media }}/css/cascade.css">
+		<link rel="icon" type="image/svg+xml" href="{{ media }}/img/favicon.svg">
+		<script src="{{ dispatcher.build_url('admin/translations', dispatcher.lang) }}"></script>
+	</head>
+	<body class="lang_{{ dispatcher.lang }}">
+		<div class="liuli-bg" aria-hidden="true">
+			<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+			<div class="blob b4"></div><div class="blob b5"></div>
+		</div>
+
+		<div class="liuli-login-wrap">
+			<form class="liuli-login" method="post">
+				<div class="mark">
+					<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M12 2.5 4.5 7v10L12 21.5 19.5 17V7L12 2.5Z"/>
+						<path d="M12 12 4.5 7M12 12l7.5-5M12 12v9.5"/>
+					</svg>
+				</div>
+				<h2>琉璃 Liuli</h2>
+				<div class="host">正在登录 <b>{{ hostname }}</b>{{ distver ? ` · ${distname} ${distver}` : '' }}</div>
+
+				{% if (fuser): %}
+				<div class="err">! 用户名或密码错误, 请重试</div>
+				{% endif %}
+
+				<div class="liuli-field">
+					<label for="luci-username">用户名</label>
+					<input id="luci-username" class="cbi-input-text" type="text" name="luci_username"
+						value="{{ entityencode(duser ?? 'root', true) }}" autocomplete="username">
+				</div>
+				<div class="liuli-field">
+					<label for="luci-password">密码</label>
+					<input id="luci-password" class="cbi-input-text" type="password" name="luci_password"
+						autocomplete="current-password" autofocus>
+				</div>
+				<button class="go" type="submit">登 录</button>
+				<div class="foot">{{ distname }}{{ distver ? ` ${distver}` : '' }} · LuCI · 琉璃主题 v1.0</div>
+			</form>
+		</div>
+
+		<script>
+			var input = document.getElementsByName('luci_password')[0];
+			if (input && !input.hasAttribute('autofocus'))
+				input.focus();
+		</script>
+	</body>
+</html>
