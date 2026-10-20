@@ -2,16 +2,45 @@
 'require view';
 'require rpc';
 'require poll';
+'require dom';
 
-/* 琉璃看板 — Liuli device dashboard view
- * 设备列表 / 厂商与类型识别 / 连接状态 / 今日流量排行
+/* 琉璃看板 — Liuli router dashboard
+ * 机器概况 / 系统状态 / 服务徽标 / 网络与无线 / 存储 /
+ * 设备看板(品牌 logo + 今日流量排行) / 系统日志
+ *
+ * 注意: LuCI 的 rpc.declare({ expect }) 只使用 expect 的第一个 key,
+ * 并且会用该 key 下钻返回值 (ret = ret[key])。要保留完整返回对象
+ * 必须写成 expect: { '': {} }。
  */
 
 const callDevices = rpc.declare({
 	object: 'luci.liuli',
 	method: 'getDevices',
-	expect: { leases: [], arp: [], stations: [], traffic: {} }
+	expect: { '': {} }
 });
+
+const callSystem = rpc.declare({
+	object: 'luci.liuli',
+	method: 'getSystem',
+	expect: { '': {} }
+});
+
+const callLog = rpc.declare({
+	object: 'luci.liuli',
+	method: 'getLog',
+	params: [ 'lines' ],
+	expect: { '': {} }
+});
+
+/* LuCI 的 dom.append() 会把 children 数组里的 null / undefined 渲染成字面
+ * 文本 "null" (它误判了 children 本身而非 children[i])。这里包一层,
+ * 在交给 E() 之前把空项过滤掉。 */
+const EE = function(tag, attrs, children) {
+	const list = Array.isArray(children)
+		? children
+		: (children == null ? [] : [ children ]);
+	return E(tag, attrs, list.filter((c) => c != null && c !== false && c !== ''));
+};
 
 /* ---------- 设备类型图标 (1.7px 线性) ---------- */
 
@@ -29,6 +58,9 @@ const TYPE_ICONS = {
 	users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/><path d="M5.5 21v-1.5a3.5 3.5 0 0 1 3-3.46M18.5 21v-1.5a3.5 3.5 0 0 0-3-3.46"/></svg>',
 	down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10M12 14l-3.5-3.5M12 14l3.5-3.5"/><path d="M5 20h14"/></svg>',
 	up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10M12 10l-3.5 3.5M12 10l3.5 3.5"/><path d="M5 4h14"/></svg>',
+	cpu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/></svg>',
+	mem: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 17v3M12 17v3M17 17v3M7 11h3M14 11h3"/></svg>',
+	disk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
 	unknown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8v.3"/><path d="M12 17.2h.01"/></svg>'
 };
 
@@ -40,7 +72,6 @@ const TYPE_NAMES = {
 
 /* ---------- 品牌 logo (simple-icons, CC0, 本地内置) ---------- */
 
-/* OUI 厂商名 → logo slug */
 const BRAND_LOGOS = {
 	'Apple': 'apple', 'Samsung': 'samsung', 'Xiaomi': 'xiaomi', 'HUAWEI': 'huawei',
 	'Honor': 'honor', 'OPPO': 'oppo', 'vivo': 'vivo', 'OnePlus': 'oneplus',
@@ -54,12 +85,11 @@ const BRAND_LOGOS = {
 	'Shelly': 'shelly', 'Hewlett-Packard': 'hp', 'Epson': 'epson'
 };
 
-/* 主机名 → logo slug (MAC 随机化时的主要识别手段) */
 const HOST_BRANDS = [
 	[/iphone|ipad|ipod|macbook|imac|macmini|airpods|appletv|homepod/i, 'apple'],
 	[/galaxy|sm-[sgatv]\d|samsung/i, 'samsung'],
 	[/redmi|poco|xiaomi|miui|mijia|mitv|mi-tv|米家|小米/i, 'xiaomi'],
-	[/huawei|matebook|mate\s?\d|nova\s?\d|harmony|华为|荣耀/i, 'huawei'],
+	[/huawei|matebook|mate\s?\d|nova\s?\d|harmony|华为/i, 'huawei'],
 	[/honor/i, 'honor'],
 	[/oneplus|一加/i, 'oneplus'],
 	[/oppo|reno|find\s?x/i, 'oppo'],
@@ -95,7 +125,6 @@ const HOST_BRANDS = [
 	[/epson/i, 'epson']
 ];
 
-/* slug → 展示名 (主机名识别出品牌时用于补充厂商字段) */
 const BRAND_NAMES = {
 	apple: 'Apple', samsung: 'Samsung', xiaomi: 'Xiaomi', huawei: 'HUAWEI', honor: 'Honor',
 	oppo: 'OPPO', vivo: 'vivo', oneplus: 'OnePlus', google: 'Google', motorola: 'Motorola',
@@ -110,9 +139,9 @@ const BRAND_NAMES = {
 
 function brandSlug(hostname, vendor) {
 	const h = String(hostname || '');
-	for (const [re, slug] of HOST_BRANDS)
-		if (re.test(h))
-			return slug;
+	for (let i = 0; i < HOST_BRANDS.length; i++)
+		if (HOST_BRANDS[i][0].test(h))
+			return HOST_BRANDS[i][1];
 	if (vendor && BRAND_LOGOS[vendor])
 		return BRAND_LOGOS[vendor];
 	return null;
@@ -220,8 +249,6 @@ function vendorOf(mac) {
 	return OUI[p] || null;
 }
 
-/* ---------- 设备类型识别 ---------- */
-
 function typeOf(hostname, vendor) {
 	const h = String(hostname || '').toLowerCase();
 
@@ -251,10 +278,80 @@ function typeOf(hostname, vendor) {
 	return 'unknown';
 }
 
-/* ---------- 工具 ---------- */
+/* ---------- 服务图标 (1.7px 线性) ---------- */
+
+const SVC_ICONS = {
+	globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 2.5 15.3 0 18M12 3c-2.5 2.7-2.5 15.3 0 18"/></svg>',
+	shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/></svg>',
+	shieldcheck: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg>',
+	terminal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>',
+	clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+	wifi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9a15 15 0 0 1 19 0M5.5 12.5a10 10 0 0 1 13 0M8.5 16a6 6 0 0 1 7 0M12 19.5h.01"/></svg>',
+	server: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg>',
+	dns: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>',
+	share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.6l6.8-4M8.6 13.4l6.8 4"/></svg>',
+	lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10.5" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+	cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10a4 4 0 0 0 .4-8A6 6 0 0 0 6 11.5 3.5 3.5 0 0 0 7 18z"/></svg>',
+	gauge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-5"/></svg>',
+	route: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.2 16.4C11 13 10.5 10.5 15.8 7.2"/></svg>',
+	folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>',
+	cog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9"/></svg>',
+	sparkles: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3l1.6 4.3L16.9 9l-4.3 1.7L11 15l-1.6-4.3L5.1 9l4.3-1.7L11 3z"/><path d="M18.2 14.6l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8.8-2.1z"/></svg>',
+	database: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
+	plug: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0V8zM12 17v4"/></svg>'
+};
+
+const SVC_ICON_MAP = [
+	[/^lucky$/i, 'sparkles'],
+	[/(upnp|miniupnpd|natpmp)/i, 'share'],
+	[/^(network|netifd)$/i, 'globe'],
+	[/(firewall|nftables)/i, 'shield'],
+	[/(dnsmasq|odhcpd|dhcp|dhcpv6)/i, 'dns'],
+	[/(uhttpd|nginx|lighttpd|rpcd|uwsgi)/i, 'server'],
+	[/(dropbear|sshd|ssh|ttyd|telnet)/i, 'terminal'],
+	[/^cron$/i, 'clock'],
+	[/(ntpd|sysntpd|chrony|time|sysfixtime)/i, 'clock'],
+	[/(wifi|wpad|hostapd|supplicant|mtwifi|mtk|wireless|kmod)/i, 'wifi'],
+	[/(samba|ksmbd|nfs|minidlna|dlna|ftp)/i, 'folder'],
+	[/(vpn|wireguard|openvpn|zerotier|tailscale|easytier|easy|tunsafe|passwall|openclash|clash|ssr|v2ray|xray|brook)/i, 'lock'],
+	[/(ddns|dynamic_dns)/i, 'cloud'],
+	[/(sqm|qos)/i, 'gauge'],
+	[/(mwan3|mwan|policy|balancing)/i, 'route'],
+	[/(adblock|adguard|adbyby|dnsmasq-full)/i, 'shieldcheck'],
+	[/(log|syslog|logd|rsyslog)/i, 'database'],
+	[/(usb|storage|block|fstab|mount|hdparm)/i, 'folder'],
+	[/(system|boot|done|led|button|hotplug|urngd|random|sysctl|rpcd|procd|ubus)/i, 'cpu'],
+	[/(mosquitto|mqtt)/i, 'route']
+];
+
+const SVC_NAMES = {
+	lucky: 'Lucky 大吉', network: '网络 (netifd)', firewall: '防火墙', dnsmasq: 'DNS / DHCP',
+	odhcpd: 'IPv6 DHCP', uhttpd: 'Web 管理界面', rpcd: 'RPC 服务', dropbear: 'SSH 远程登录',
+	cron: '计划任务', system: '系统设置', boot: '启动脚本', done: '启动完成',
+	led: 'LED 指示', sysfixtime: '时间同步', sysntpd: 'NTP 客户端', log: '系统日志',
+	'network': '网络', wifi: '无线网络', mtwifi_cfg: 'MTWiFi 配置',
+	upnpd: 'UPnP 自动端口映射', miniupnpd: 'UPnP', sqm: '智能队列管理 (SQM)',
+	mwan3: '多线负载均衡', ddns: '动态域名', samba4: 'Samba 文件共享', ksmbd: 'Samba 文件共享',
+	adblock: '广告过滤', zerotier: 'ZeroTier 虚拟网', wireguard: 'WireGuard VPN',
+	easytier: 'EasyTier 虚拟网', mosquitto: 'MQTT 服务'
+};
+
+function svcIcon(name) {
+	for (let i = 0; i < SVC_ICON_MAP.length; i++)
+		if (SVC_ICON_MAP[i][0].test(name))
+			return SVC_ICON_MAP[i][1];
+	return 'cog';
+}
+
+function svcLabel(name) {
+	return SVC_NAMES[name] || name;
+}
+
+/* ---------- 工具函数 ---------- */
 
 function fmtBytes(n) {
 	n = Number(n) || 0;
+	if (n >= 1099511627776) return (n / 1099511627776).toFixed(2) + ' TB';
 	if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
 	if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
 	if (n >= 1024) return (n / 1024).toFixed(0) + ' KB';
@@ -270,12 +367,28 @@ function shortMac(mac) {
 	return m.substr(m.length - 5);
 }
 
+function fmtUptime(s) {
+	s = Number(s) || 0;
+	const d = Math.floor(s / 86400);
+	const h = Math.floor((s % 86400) / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	if (d > 0) return d + ' 天 ' + h + ' 小时';
+	if (h > 0) return h + ' 小时 ' + m + ' 分';
+	return m + ' 分 ' + (s % 60) + ' 秒';
+}
+
+function fmtClock(ts) {
+	if (!ts) return '—';
+	const d = new Date(Number(ts) > 1e12 ? Number(ts) : Number(ts) * 1000);
+	if (isNaN(d.getTime())) return '—';
+	const p = (n) => (n < 10 ? '0' : '') + n;
+	return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+
 function signalText(sig) {
-	if (sig == null)
-		return null;
+	if (sig == null) return null;
 	const n = Number(sig);
-	if (isNaN(n))
-		return null;
+	if (isNaN(n)) return null;
 	if (n >= -50) return n + ' dBm 极佳';
 	if (n >= -60) return n + ' dBm 良好';
 	if (n >= -70) return n + ' dBm 一般';
@@ -284,39 +397,629 @@ function signalText(sig) {
 
 function wifiBand(iface) {
 	const i = String(iface || '');
-	if (/rai|ax|5g|5ghz|band5/i.test(i)) return '5G';
-	if (/ra0|2g|2\.4/i.test(i)) return '2.4G';
+	if (/5g|rax|rai|ax|band5/i.test(i)) return '5 GHz';
+	if (/2\.4|ra0|bg|band2/i.test(i)) return '2.4 GHz';
 	return null;
 }
 
 function iconEl(type, cls, brand) {
 	if (brand)
-		return E('img', {
+		return EE('img', {
 			'class': (cls || 'ico') + ' brand-logo',
 			'src': L.resource('view/liuli/brands/' + brand + '.svg'),
 			'alt': brand,
 			'loading': 'lazy'
 		});
-	const el = E('span', { 'class': cls || 'ico' });
+	const el = EE('span', { 'class': cls || 'ico' });
 	el.innerHTML = TYPE_ICONS[type] || TYPE_ICONS.unknown;
 	return el;
 }
 
+function svcIconEl(name, cls) {
+	const el = EE('span', { 'class': cls || 'ico' });
+	el.innerHTML = SVC_ICONS[svcIcon(name)] || SVC_ICONS.cog;
+	return el;
+}
+
+const SEVERITY = ['emerg', 'alert', 'crit', 'err', 'warn', 'notice', 'info', 'debug'];
+const FACILITY = ['kern', 'user', 'mail', 'daemon', 'auth', 'syslog', 'lpr', 'news', 'uucp',
+	'cron', 'authpriv', 'ftp', 'ntp', 'audit', 'alert', 'clockd', 'local0', 'local1',
+	'local2', 'local3', 'local4', 'local5', 'local6', 'local7'];
+
 /* ---------- 视图 ---------- */
 
 return view.extend({
+	data: null,
+
 	load() {
-		return Promise.all([ callDevices() ]);
+		const safe = (p) => p.catch(() => null);
+		return Promise.all([
+			safe(callDevices()),
+			safe(callSystem()),
+			safe(callLog(40))
+		]);
 	},
 
 	render(raw) {
 		const self = this;
-		const d = raw[0] ?? {};
+
+		this.data = {
+			devices: (raw[0] && typeof raw[0] == 'object') ? raw[0] : null,
+			system: (raw[1] && typeof raw[1] == 'object') ? raw[1] : null,
+			log: (raw[2] && typeof raw[2] == 'object') ? raw[2] : null
+		};
+		this.filterKey = 'all';
+		this.showAllServices = false;
+		this.rateHistory = [];
+		this.prevStats = null;
+
+		this.elHead = EE('div', { 'class': 'll-head' });
+		this.elStats = EE('div', { 'class': 'll-grid ll-stats' });
+		this.elSystem = EE('div', { 'class': 'll-sys' });
+		this.elServices = EE('div', { 'class': 'll-badges' });
+		this.elSvcMore = EE('div', { 'class': 'll-more' });
+		this.elNetwork = EE('div', { 'class': 'll-grid ll-net' });
+		this.elStorage = EE('div', { 'class': 'll-grid ll-disk' });
+		this.elDevHero = EE('div', { 'class': 'll-devhero' });
+		this.elFilters = EE('div', { 'class': 'll-filters' });
+		this.elDevices = EE('div', { 'class': 'll-devices' });
+		this.elLog = EE('div', { 'class': 'll-log' });
+
+		const nav = EE('div', { 'class': 'll-nav' }, [
+			EE('a', { 'href': '#ll-sec-system' }, ['系统']),
+			EE('a', { 'href': '#ll-sec-services' }, ['服务']),
+			EE('a', { 'href': '#ll-sec-network' }, ['网络']),
+			EE('a', { 'href': '#ll-sec-storage' }, ['存储']),
+			EE('a', { 'href': '#ll-sec-devices' }, ['设备']),
+			EE('a', { 'href': '#ll-sec-log' }, ['日志'])
+		]);
+
+		const root = EE('div', { 'class': 'liuli-dash' }, [
+			EE('link', { 'rel': 'stylesheet', 'href': L.resource('view/liuli.css') }),
+			EE('div', { 'id': 'll-top' }),
+			this.elHead,
+			nav,
+			this.elStats,
+			this.section('系统状态', 'll-sec-system', [ this.elSystem ]),
+			this.section('服务徽标', 'll-sec-services', [ this.elServices, this.elSvcMore ]),
+			this.section('网络与无线', 'll-sec-network', [ this.elNetwork ]),
+			this.section('存储', 'll-sec-storage', [ this.elStorage ]),
+			this.section('设备看板', 'll-sec-devices', [
+				this.elDevHero, this.elFilters, this.elDevices
+			]),
+			this.section('系统日志', 'll-sec-log', [ this.elLog ])
+		]);
+
+		this.rootEl = root;
+		this.buildFilters();
+		this.renderAll();
+
+		if (!this.pollFn)
+			this.pollFn = L.bind(this.refresh, this);
+		poll.add(this.pollFn, 10);
+
+		return root;
+	},
+
+	section(title, id, children) {
+		return EE('section', { 'class': 'll-section', 'id': id }, [
+			EE('div', { 'class': 'll-sechead' }, [
+				EE('h3', {}, [ title ]),
+				EE('a', { 'class': 'll-top', 'href': '#ll-top', 'click': (ev) => {
+					ev.preventDefault();
+					document.getElementById('ll-top').scrollIntoView({ behavior: 'smooth', block: 'start' });
+				} }, ['回到顶部 ↑'])
+			]),
+			EE('div', { 'class': 'll-secbody' }, children)
+		]);
+	},
+
+	renderAll() {
+		this.sampleRate();
+		this.renderHead();
+		this.renderStats();
+		this.renderSystem();
+		this.renderServices();
+		this.renderNetwork();
+		this.renderStorage();
+		this.renderDevices();
+		this.renderLog();
+	},
+
+	/* ---------- 实时速率采样 ---------- */
+
+	sampleRate() {
+		const sys = this.data.system;
+		if (!sys || !sys.interfaces)
+			return;
+
+		/* 取带统计数据的 WAN 接口 */
+		let w = null;
+		for (const i of sys.interfaces)
+			if (i.is_wan && i.stats && i.up) { w = i; break; }
+		if (!w)
+			for (const i of sys.interfaces)
+				if (i.is_wan && i.stats) { w = i; break; }
+		if (!w) {
+			this.currentRate = null;
+			return;
+		}
+
+		const now = Date.now() / 1000;
+		const p = this.prevStats;
+		this.prevStats = { key: w.interface, ts: now, rx: w.stats.rx_bytes, tx: w.stats.tx_bytes };
+
+		if (!p || p.key != w.interface) {
+			this.currentRate = null;
+			return;
+		}
+
+		const dt = now - p.ts;
+		if (!(dt > 0) || dt > 600 || w.stats.rx_bytes < p.rx) {
+			this.currentRate = null;
+			return;
+		}
+
+		this.currentRate = {
+			rx: Math.max(0, (w.stats.rx_bytes - p.rx) / dt),
+			tx: Math.max(0, (w.stats.tx_bytes - p.tx) / dt),
+			iface: w.interface
+		};
+
+		this.rateHistory.push({ rx: this.currentRate.rx, tx: this.currentRate.tx });
+		while (this.rateHistory.length > 60)
+			this.rateHistory.shift();
+	},
+
+	/* ---------- 页头 ---------- */
+
+	renderHead() {
+		const sys = this.data.system ?? {};
+		const board = sys.board ?? {};
+		const info = sys.system ?? {};
+
+		const kv = (k, v) => EE('div', { 'class': 'll-kv' }, [
+			EE('span', { 'class': 'k' }, [ k ]),
+			EE('span', { 'class': 'v' }, [ (v == null || v === '') ? '—' : String(v) ])
+		]);
+
+		const now = new Date();
+		const p = (n) => (n < 10 ? '0' : '') + n;
+
+		dom.content(this.elHead, [
+			EE('div', { 'class': 'll-title' }, [
+				EE('h2', {}, [ board.hostname || 'OpenWrt' ]),
+				EE('div', { 'class': 'll-sub' }, [
+					board.model || board.system || '未知机型',
+					' · ',
+					(board.distribution || 'ImmortalWrt') + (board.version ? ' ' + board.version : ''),
+					' · 内核 ' + (board.kernel || '—')
+				])
+			]),
+			EE('div', { 'class': 'll-headmeta' }, [
+				kv('运行时间', fmtUptime(info.uptime)),
+				kv('系统时间', p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds())),
+				kv('统计日期', sys.date || '—'),
+				kv('自动刷新', '10 秒'),
+				EE('button', {
+					'class': 'cbi-button cbi-button-apply ll-refresh',
+					'click': () => this.refresh()
+				}, ['立即刷新'])
+			])
+		]);
+	},
+
+	/* ---------- 概览卡片 ---------- */
+
+	renderStats() {
+		const dev = this.computeDevices();
+		const sys = this.data.system ?? {};
+		const info = sys.system ?? {};
+		const cpu = sys.cpu ?? {};
+		const mem = info.memory ?? {};
+
+		const memUsed = Math.max(0, (mem.total || 0) - (mem.free || 0) - (mem.buffered || 0));
+		const memPct = mem.total ? Math.round(memUsed / mem.total * 100) : 0;
+
+		dom.content(this.elStats, [
+			this.metric('在线设备', dev.online + ' / ' + dev.list.length, '', 'users'),
+			this.metric('今日下载', fmtBytes(dev.totalRx), '', 'down'),
+			this.metric('今日上传', fmtBytes(dev.totalTx), '', 'up'),
+			this.metric('CPU 使用率', (cpu.usage == null ? '—' : cpu.usage + '%'), '', 'cpu'),
+			this.metric('内存占用', memPct + '%', fmtBytes(memUsed) + ' / ' + fmtBytes(mem.total), 'mem'),
+			this.metric('连接数', (sys.conntrack && sys.conntrack.count != null) ? sys.conntrack.count : '—',
+				(sys.conntrack && sys.conntrack.max) ? '上限 ' + sys.conntrack.max : '', 'router')
+		]);
+	},
+
+	metric(label, value, unit, icon) {
+		return EE('div', { 'class': 'll-card ll-metric' }, [
+			EE('div', { 'class': 'm-top' }, [ iconEl(icon, 'ico'), label ]),
+			EE('div', { 'class': 'm-val' }, [ String(value) ]),
+			unit ? EE('div', { 'class': 'm-unit' }, [ String(unit) ]) : null
+		]);
+	},
+
+	/* ---------- 系统状态 ---------- */
+
+	renderSystem() {
+		const sys = this.data.system;
+		if (!sys) {
+			dom.content(this.elSystem, [ this.empty('系统数据不可用 (rpcd 插件未生效或权限不足)') ]);
+			return;
+		}
+		const info = sys.system ?? {};
+		const cpu = sys.cpu ?? {};
+		const mem = info.memory ?? {};
+		const swap = info.swap ?? {};
+		const ct = sys.conntrack ?? {};
+		const temps = (sys.temp && sys.temp.zones) ? sys.temp.zones : [];
+		const load = info.load ?? [0, 0, 0];
+
+		const memUsed = Math.max(0, (mem.total || 0) - (mem.free || 0) - (mem.buffered || 0));
+		const memPct = mem.total ? Math.round(memUsed / mem.total * 100) : 0;
+		const swapUsed = Math.max(0, (swap.total || 0) - (swap.free || 0));
+		const swapPct = swap.total ? Math.round(swapUsed / swap.total * 100) : 0;
+		const ctPct = (ct.count != null && ct.max) ? Math.min(100, Math.round(ct.count / ct.max * 100)) : 0;
+
+		const bar = (pct, text, cls) => EE('div', { 'class': 'll-bar' }, [
+			EE('div', { 'class': 'll-bar-track' }, [
+				EE('div', { 'class': 'll-bar-fill ' + (cls || ''), 'style': 'width:' + Math.max(0, Math.min(100, pct)) + '%' })
+			]),
+			EE('div', { 'class': 'll-bar-text' }, [ text ])
+		]);
+
+		const kv = (k, v) => EE('div', { 'class': 'll-row' }, [
+			EE('span', { 'class': 'k' }, [ k ]),
+			EE('span', { 'class': 'v mono' }, [ (v == null || v === '') ? '—' : String(v) ])
+		]);
+
+		const zoneCards = temps.map((z) => EE('div', { 'class': 'll-temp' }, [
+			EE('div', { 'class': 't-val' }, [ (Math.round(z.value * 10) / 10) + '°C' ]),
+			EE('div', { 'class': 't-name' }, [ z.zone ])
+		]));
+
+		dom.content(this.elSystem, [
+			EE('div', { 'class': 'll-card ll-syscpu' }, [
+				this.ring((cpu.usage == null) ? 0 : cpu.usage, 'CPU'),
+				EE('div', { 'class': 'll-sysinfo' }, [
+					kv('处理器', (cpu.model || '—') + ' × ' + (cpu.count || 1) + ' 核'),
+					kv('负载 1/5/15', [load[0], load[1], load[2]].map((v) => (Number(v) / 65536).toFixed(2)).join(' / ')),
+					kv('进程数', info.processes ?? '—'),
+					kv('运行时长', fmtUptime(info.uptime))
+				])
+			]),
+			EE('div', { 'class': 'll-card ll-sysmem' }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('mem', 'ico'), '内存与交换' ]),
+				bar(memPct, fmtBytes(memUsed) + ' / ' + fmtBytes(mem.total) + ' (' + memPct + '%)'),
+				EE('div', { 'class': 'll-memmeta' }, [
+					'可用 ' + fmtBytes(mem.available != null ? mem.available : mem.free),
+					' · 缓冲 ' + fmtBytes(mem.buffered)
+				]),
+				swap.total ? bar(swapPct, 'Swap ' + fmtBytes(swapUsed) + ' / ' + fmtBytes(swap.total)) : null,
+				swap.total ? null : EE('div', { 'class': 'll-memmeta' }, ['未启用交换分区'])
+			]),
+			EE('div', { 'class': 'll-card ll-sysnet' }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('router', 'ico'), '连接跟踪' ]),
+				bar(ctPct, (ct.count != null ? ct.count : '—') + (ct.max ? ' / ' + ct.max : '')),
+				EE('div', { 'class': 'll-memmeta' }, ['当前 NAT 会话数与上限'])
+			]),
+			EE('div', { 'class': 'll-card ll-systemp' }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('cpu', 'ico'), '温度' ]),
+				zoneCards.length ? EE('div', { 'class': 'll-temps' }, zoneCards) :
+					EE('div', { 'class': 'll-temps' }, [
+						EE('div', { 'class': 'll-temp' }, [
+							EE('div', { 'class': 't-val' }, [ (sys.temp && sys.temp.text) ? sys.temp.text.split(/[,;]/)[0] : '—' ]),
+							EE('div', { 'class': 't-name' }, [ '详情' ])
+						])
+					]),
+				(sys.temp && sys.temp.text) ? EE('div', { 'class': 'll-memmeta' }, [ String(sys.temp.text) ]) : null
+			]),
+			this.procCard(sys.procs)
+		]);
+	},
+
+	procCard(procs) {
+		if (!procs || !procs.length)
+			return null;
+
+		const top = procs.slice().sort((a, b) => (b.cpu || 0) - (a.cpu || 0)).slice(0, 8);
+		const maxCpu = Math.max(1, top[0].cpu || 1);
+
+		return EE('div', { 'class': 'll-card ll-proc' }, [
+			EE('div', { 'class': 'll-cardtitle' }, [ iconEl('cpu', 'ico'), '进程 TOP 8 (按 CPU)' ]),
+			EE('div', { 'class': 'll-proclist' }, top.map((p) => {
+				const cmd = String(p.command || '').split(/\s+/)[0].split('/').pop() || '—';
+				return EE('div', { 'class': 'll-procrow' }, [
+					EE('span', { 'class': 'p-cmd' }, [ cmd ]),
+					EE('span', { 'class': 'p-bar' }, [
+						EE('i', { 'style': 'width:' + Math.min(100, (p.cpu / maxCpu) * 100) + '%' })
+					]),
+					EE('span', { 'class': 'p-cpu mono' }, [ (p.cpu || 0) + '%' ]),
+					EE('span', { 'class': 'p-pid mono' }, [ '#' + p.pid ])
+				]);
+			}))
+		]);
+	},
+
+	ring(pct, label) {
+		pct = Math.max(0, Math.min(100, Number(pct) || 0));
+		return EE('div', { 'class': 'll-ring', 'style': '--p:' + pct }, [
+			EE('div', { 'class': 'll-ring-in' }, [
+				EE('span', { 'class': 'll-ring-v' }, [ Math.round(pct) + '%' ]),
+				EE('span', { 'class': 'll-ring-l' }, [ label ])
+			])
+		]);
+	},
+
+	rateCard() {
+		const r = this.currentRate;
+		const rpm = (b) => fmtBytes(b) + '/s';
+
+		const canvas = EE('canvas', { 'class': 'll-rate-canvas', 'width': 480, 'height': 72 });
+		const body = EE('div', { 'class': 'll-card ll-rate' }, [
+			EE('div', { 'class': 'll-cardtitle' }, [
+				EE('span', { 'class': 'ico' }, [ (function () {
+					const el = EE('span');
+					el.innerHTML = TYPE_ICONS.router;
+					return el.firstChild;
+				})() ]),
+				'WAN 实时速率' + (r ? ' · ' + r.iface : '')
+			]),
+			EE('div', { 'class': 'll-rate-nums' }, [
+				EE('span', { 'class': 'dn' }, [ EE('b', {}, [ r ? rpm(r.rx) : '—' ]), ' 下载' ]),
+				EE('span', { 'class': 'up' }, [ EE('b', {}, [ r ? rpm(r.tx) : '—' ]), ' 上传' ])
+			]),
+			canvas,
+			EE('div', { 'class': 'll-memmeta' }, [
+				r ? '最近 ' + this.rateHistory.length + ' 次采样 · 每 10 秒更新' : '正在采集首个采样点…'
+			])
+		]);
+
+		/* canvas 需要在节点进入文档后才能取到尺寸, 延迟一帧绘制 */
+		window.setTimeout(() => this.drawRate(canvas), 0);
+
+		return body;
+	},
+
+	drawRate(canvas) {
+		if (!canvas || !canvas.getContext)
+			return;
+
+		const ctx = canvas.getContext('2d');
+		if (!ctx)
+			return;
+
+		const cssW = canvas.clientWidth || canvas.parentNode?.clientWidth || 300;
+		const cssH = 72;
+		const dpr = window.devicePixelRatio || 1;
+
+		canvas.width = Math.max(80, Math.round(cssW * dpr));
+		canvas.height = Math.round(cssH * dpr);
+		canvas.style.height = cssH + 'px';
+
+		const w = canvas.width, h = canvas.height;
+		ctx.clearRect(0, 0, w, h);
+
+		const hist = this.rateHistory || [];
+		if (hist.length < 2) {
+			ctx.fillStyle = 'rgba(148,163,184,.55)';
+			ctx.font = (11 * dpr) + 'px system-ui, sans-serif';
+			ctx.fillText('采集中…', 4, h / 2 + 4 * dpr);
+			return;
+		}
+
+		let max = 1;
+		for (const p of hist)
+			max = Math.max(max, p.rx, p.tx);
+
+		const stroke = (key, color, fillTop) => {
+			ctx.beginPath();
+			for (let i = 0; i < hist.length; i++) {
+				const x = (i / (hist.length - 1)) * w;
+				const y = h - (hist[i][key] / max) * (h - 6 * dpr) - 3 * dpr;
+				i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+			}
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 1.8 * dpr;
+			ctx.lineJoin = 'round';
+			ctx.stroke();
+
+			ctx.lineTo(w, h);
+			ctx.lineTo(0, h);
+			ctx.closePath();
+			ctx.fillStyle = fillTop;
+			ctx.fill();
+		};
+
+		stroke('rx', '#5b7cfa', 'rgba(91,124,250,.16)');
+		stroke('tx', '#8b5cf6', 'rgba(139,92,246,.13)');
+	},
+
+	/* ---------- 服务徽标 ---------- */
+
+	renderServices() {
+		const sys = this.data.system;
+		if (!sys || !sys.services) {
+			dom.content(this.elServices, [ this.empty('服务数据不可用') ]);
+			return;
+		}
+
+		const all = sys.services.slice();
+		const featured = all.filter((s) => s.enabled || s.running);
+		const hidden = all.length - featured.length;
+		const shown = this.showAllServices ? all : featured;
+
+		dom.content(this.elServices, shown.map((s) => {
+			const cls = s.running ? 'on' : (s.enabled ? 'idle' : 'off');
+			const state = s.running ? '运行中' : (s.enabled ? '未运行' : '未启用');
+			return EE('div', { 'class': 'll-badge ' + cls }, [
+				svcIconEl(s.name, 'b-icon'),
+				EE('div', { 'class': 'b-body' }, [
+					EE('div', { 'class': 'b-name' }, [ svcLabel(s.name) ]),
+					EE('div', { 'class': 'b-meta' }, [ s.name + (s.index != null ? ' · 启动序 ' + s.index : '') ])
+				]),
+				EE('span', { 'class': 'b-state' }, [ EE('i', { 'class': 'dot' }), state ])
+			]);
+		}));
+
+		const self = this;
+		if (hidden > 0 || this.showAllServices) {
+			dom.content(this.elSvcMore, [
+				EE('button', {
+					'class': 'cbi-button ll-btn',
+					'click': function() {
+						self.showAllServices = !self.showAllServices;
+						self.renderServices();
+					}
+				}, [ this.showAllServices ? '只看已启用服务' : ('显示全部 ' + all.length + ' 个服务') ])
+			]);
+		}
+		else {
+			dom.content(this.elSvcMore, [
+				EE('div', { 'class': 'll-memmeta' }, [ '共 ' + all.length + ' 个服务脚本，未启用的已隐藏' ])
+			]);
+		}
+	},
+
+	/* ---------- 网络与无线 ---------- */
+
+	renderNetwork() {
+		const sys = this.data.system;
+		if (!sys || !sys.interfaces) {
+			dom.content(this.elNetwork, [ this.empty('网络数据不可用') ]);
+			return;
+		}
+
+		const dev = this.computeDevices();
+		const stationsByIface = dev.stationsByIface;
+		const cards = [];
+
+		const ifcs = sys.interfaces.slice();
+		const wan = ifcs.filter((i) => i.is_wan);
+		const lan = ifcs.filter((i) => !i.is_wan);
+
+		const kv = (k, v) => EE('div', { 'class': 'll-row' }, [
+			EE('span', { 'class': 'k' }, [ k ]),
+			EE('span', { 'class': 'v mono' }, [ (v == null || v === '') ? '—' : String(v) ])
+		]);
+
+		/* WAN 实时速率 + 60 点历史曲线 */
+		cards.push(this.rateCard());
+
+		for (const i of wan) {
+			cards.push(EE('div', { 'class': 'll-card ll-iface ' + (i.up ? 'up' : 'down') }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('router', 'ico'), 'WAN · ' + i.interface ]),
+				EE('div', { 'class': 'll-iftop' }, [
+					EE('span', { 'class': 'll-ip mono' }, [ (i.ip4 && i.ip4.address) || (i.ip6 && i.ip6.address) || '未获取地址' ]),
+					EE('span', { 'class': 'll-tag ' + (i.up ? 'ok' : 'bad') }, [ i.up ? '已连接' : '未连接' ])
+				]),
+				kv('协议', i.proto),
+				kv('设备', i.device),
+				kv('网关', i.gateway || i.gateway6),
+				kv('DNS', (i.dns && i.dns.length) ? i.dns.slice(0, 2).join(', ') : '—'),
+				kv('IPv6', (i.ip6 && i.ip6.address) || '—'),
+				kv('在线时长', i.up ? fmtUptime(i.uptime) : '—')
+			]));
+		}
+
+		for (const i of lan) {
+			cards.push(EE('div', { 'class': 'll-card ll-iface ' + (i.up ? 'up' : 'down') }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('router', 'ico'), (i.interface.toUpperCase() === 'LAN' ? 'LAN' : i.interface) ]),
+				EE('div', { 'class': 'll-iftop' }, [
+					EE('span', { 'class': 'll-ip mono' }, [ (i.ip4 && i.ip4.address) || (i.ip6 && i.ip6.address) || '未配置' ]),
+					EE('span', { 'class': 'll-tag ' + (i.up ? 'ok' : 'bad') }, [ i.up ? '已启用' : '未启用' ])
+				]),
+				kv('协议', i.proto),
+				kv('设备', i.device),
+				kv('IPv6', (i.ip6 && i.ip6.address) || '—'),
+				kv('MAC', i.macaddr)
+			]));
+		}
+
+		for (const r of (sys.wireless ?? [])) {
+			const ifnames = (r.interfaces ?? []).map((x) => x.ifname).filter(Boolean);
+			let clients = 0;
+			for (const n of ifnames)
+				clients += (stationsByIface[n] || 0);
+
+			const ssids = (r.interfaces ?? []).map((x) => x.ssid).filter(Boolean);
+
+			cards.push(EE('div', { 'class': 'll-card ll-radio ' + (r.up ? 'up' : 'down') }, [
+				EE('div', { 'class': 'll-cardtitle' }, [
+					svcIconEl('wpad', 'ico'),
+					'无线 · ' + (wifiBand(r.radio) || r.radio)
+				]),
+				EE('div', { 'class': 'll-iftop' }, [
+					EE('span', { 'class': 'll-ip' }, [ ssids.length ? ssids.join(' / ') : (r.radio + ' (未配置 SSID)') ]),
+					EE('span', { 'class': 'll-tag ' + (r.up ? 'ok' : 'bad') }, [ r.disabled ? '已禁用' : (r.up ? '工作中' : '离线') ])
+				]),
+				EE('div', { 'class': 'll-radiometa' }, [
+					EE('span', { 'class': 'll-chipx' }, [ '信道 ' + (r.channel ?? '—') ]),
+					EE('span', { 'class': 'll-chipx' }, [ (r.frequency ? (Math.round(r.frequency * 10) / 10 + ' GHz') : '—') ]),
+					EE('span', { 'class': 'll-chipx' }, [ '功率 ' + (r.txpower != null ? r.txpower + ' dBm' : '—') ]),
+					EE('span', { 'class': 'll-chipx strong' }, [ '客户端 ' + clients ])
+				]),
+				EE('div', { 'class': 'll-memmeta' }, [
+					'接口: ' + (ifnames.length ? ifnames.join(', ') : '—') + ' · 国家码 ' + (r.country || '—')
+				])
+			]));
+		}
+
+		dom.content(this.elNetwork, cards.length ? cards : [ this.empty('未检测到网络接口') ]);
+	},
+
+	/* ---------- 存储 ---------- */
+
+	renderStorage() {
+		const sys = this.data.system;
+		if (!sys || !sys.mounts) {
+			dom.content(this.elStorage, [ this.empty('存储数据不可用') ]);
+			return;
+		}
+
+		const skip = [/^\/dev$/, /^\/sys$/, /^\/proc$/, /^\/dev\/pts$/, /^\/tmp$/];
+		const mounts = sys.mounts.filter((m) => {
+			if (!m || !m.mount) return false;
+			if (m.device == 'devtmpfs' || m.device == 'devpts') return false;
+			for (const re of skip)
+				if (re.test(m.mount)) return false;
+			return true;
+		});
+
+		const cards = mounts.map((m) => {
+			const pct = (m.percent != null) ? m.percent : (m.size ? Math.round(m.used / m.size * 100) : 0);
+			const cls = pct >= 90 ? 'danger' : (pct >= 70 ? 'warn' : '');
+			return EE('div', { 'class': 'll-card ll-mount' }, [
+				EE('div', { 'class': 'll-cardtitle' }, [ iconEl('disk', 'ico'), m.mount ]),
+				EE('div', { 'class': 'll-bar' }, [
+					EE('div', { 'class': 'll-bar-track' }, [
+						EE('div', { 'class': 'll-bar-fill ' + cls, 'style': 'width:' + Math.max(0, Math.min(100, pct)) + '%' })
+					]),
+					EE('div', { 'class': 'll-bar-text' }, [ pct + '%' ])
+				]),
+				EE('div', { 'class': 'll-memmeta' }, [
+					fmtBytes(m.used) + ' / ' + fmtBytes(m.size) + ' · 可用 ' + fmtBytes(m.avail)
+				]),
+				EE('div', { 'class': 'll-memmeta mono' }, [ m.device ])
+			]);
+		});
+
+		dom.content(this.elStorage, cards.length ? cards : [ this.empty('未检测到挂载点') ]);
+	},
+
+	/* ---------- 设备看板 ---------- */
+
+	computeDevices() {
+		const d = this.data.devices;
+		const result = { list: [], online: 0, totalRx: 0, totalTx: 0, stationsByIface: {} };
+		if (!d)
+			return result;
+
 		const selfMacs = {};
 		for (let m of (d.self_macs ?? []))
 			selfMacs[fmtMac(m)] = 1;
 
-		/* 合并: MAC → 设备 */
 		const devices = {};
 		const upsert = (mac, info) => {
 			mac = fmtMac(mac);
@@ -342,10 +1045,14 @@ return view.extend({
 			upsert(l.mac, { ip: l.ip, hostname: l.hostname, online: Number(l.expiry) > now });
 		for (let a of (d.arp ?? []))
 			upsert(a.mac, { ip: a.ip, online: true });
-		for (let s of (d.stations ?? []))
+		for (let s of (d.stations ?? [])) {
 			upsert(s.mac, { wireless: true, signal: s.signal, iface: s.iface, online: true });
+			const key = String(s.iface || '');
+			result.stationsByIface[key] = (result.stationsByIface[key] || 0) + 1;
+		}
 
 		const traffic = d.traffic ?? {};
+		const list = [];
 		for (let mac in devices) {
 			const dev = devices[mac];
 			const t = traffic[dev.ip];
@@ -357,20 +1064,14 @@ return view.extend({
 			dev.brand = brandSlug(dev.hostname, ouiVendor);
 			dev.vendor = ouiVendor || (dev.brand ? (BRAND_NAMES[dev.brand] || dev.brand) : '未知');
 			dev.type = typeOf(dev.hostname, dev.vendor);
-			dev.name = dev.hostname || (dev.vendor + '-' + shortMac(dev.mac));
+			dev.name = dev.hostname || ((dev.vendor !== '未知' ? dev.vendor + '-' : '') + shortMac(dev.mac));
+			list.push(dev);
 		}
 
-		const list = [];
-		for (let mac in devices)
-			list.push(devices[mac]);
-
-		let online = 0, totalRx = 0, totalTx = 0;
-		for (let dev of list) {
-			if (dev.online) online++;
-			totalRx += dev.rx;
-			totalTx += dev.tx;
-		}
-		list.sort((a, b) => (b.rx + b.tx) - (a.rx + a.tx));
+		list.sort((a, b) => {
+			if (a.online != b.online) return a.online ? -1 : 1;
+			return (b.rx + b.tx) - (a.rx + a.tx);
+		});
 
 		let rank = 0, last = -1;
 		for (let i = 0; i < list.length; i++) {
@@ -379,37 +1080,17 @@ return view.extend({
 			list[i].rank = total > 0 ? rank : 0;
 		}
 
-		const top = list.length ? list[0] : null;
-		const topTotal = top ? (top.rx + top.tx) : 0;
-
-		/* ---- 汇总卡片 ---- */
-		const summary = E('div', { 'class': 'liuli-grid' }, [
-			this.metric('设备总数', list.length, '台', 'router'),
-			this.metric('在线设备', online, '台', 'users'),
-			this.metric('今日总下载', fmtBytes(totalRx), '', 'down'),
-			this.metric('今日总上传', fmtBytes(totalTx), '', 'up')
-		]);
-
-		/* ---- TOP1 英雄卡 ---- */
-		let hero = null;
-		if (top && topTotal > 0) {
-			hero = E('div', { 'class': 'liuli-hero' }, [
-				iconEl(top.type, 'liuli-hero-icon', top.brand),
-				E('div', { 'class': 'liuli-hero-body' }, [
-					E('div', { 'class': 'liuli-hero-title' }, [ '今日流量冠军' ]),
-					E('div', { 'class': 'liuli-hero-name' }, [ top.name ]),
-					E('div', { 'class': 'liuli-hero-meta' }, [
-						`${TYPE_NAMES[top.type] || '设备'} · ${top.vendor} · ${top.wireless ? '无线' : '有线'} · ${top.ip || '—'}`
-					]),
-					E('div', { 'class': 'liuli-hero-traffic' }, [
-						`↓ ${fmtBytes(top.rx)}`, E('span', { 'class': 'sep' }, '/'), `↑ ${fmtBytes(top.tx)}`
-					])
-				]),
-				E('div', { 'class': 'liuli-hero-badge' }, [ 'TOP 1' ])
-			]);
+		result.list = list;
+		for (const dev of list) {
+			if (dev.online) result.online++;
+			result.totalRx += dev.rx;
+			result.totalTx += dev.tx;
 		}
+		return result;
+	},
 
-		/* ---- 筛选 ---- */
+	buildFilters() {
+		const self = this;
 		const filters = [
 			{ key: 'all', label: '全部' },
 			{ key: 'online', label: '在线' },
@@ -420,61 +1101,65 @@ return view.extend({
 			{ key: 'nas', label: 'NAS' },
 			{ key: 'iot', label: '智能设备' }
 		];
-		const filterBar = E('div', { 'class': 'liuli-filters' });
-		for (const f of filters) {
-			filterBar.appendChild(E('button', {
-				'class': 'liuli-filter' + (f.key == 'all' ? ' active' : ''),
-				'click': (ev) => {
-					filterBar.querySelectorAll('.liuli-filter').forEach(b => b.classList.remove('active'));
-					ev.currentTarget.classList.add('active');
-					self.applyFilter(f.key);
-				}
-			}, [ f.label ]));
-		}
-
-		/* ---- 设备列表 ---- */
-		const listEl = E('div', { 'class': 'liuli-devices' });
-		const nodes = {};
-		for (const dev of list) {
-			const node = this.deviceCard(dev);
-			nodes[dev.mac] = node;
-			listEl.appendChild(node);
-		}
-
-		this.deviceNodes = nodes;
-		this.deviceList = list;
-
-		const root = E('div', { 'class': 'liuli-dash' }, [
-			E('link', { 'rel': 'stylesheet', 'href': L.resource('view/liuli.css') }),
-			E('div', { 'class': 'liuli-pagehead' }, [
-				E('div', {}, [
-					E('h2', {}, ['设备看板']),
-					E('div', { 'class': 'desc' }, [ `统计日期 ${d.date || '—'} · 数据每 10 秒自动刷新` ])
-				]),
-				E('button', {
-					'class': 'cbi-button cbi-button-add',
-					'click': () => this.refresh()
-				}, ['刷新'])
-			]),
-			summary,
-			hero,
-			filterBar,
-			listEl,
-			E('div', { 'class': 'liuli-note' }, [
-				'流量统计基于 nftables 每设备计数器; 若路由器开启了软硬件流控转发, 单设备统计可能偏低。'
-			])
-		]);
-
-		poll.add(L.bind(this.refresh, this), 10);
-
-		return root;
+		dom.content(this.elFilters, filters.map((f) => EE('button', {
+			'class': 'll-filter' + (f.key == 'all' ? ' active' : ''),
+			'data-key': f.key,
+			'click': function(ev) {
+				self.elFilters.querySelectorAll('.ll-filter').forEach((b) => b.classList.remove('active'));
+				ev.currentTarget.classList.add('active');
+				self.filterKey = f.key;
+				self.applyFilter();
+			}
+		}, [ f.label ])));
 	},
 
-	metric(label, value, unit, icon) {
-		return E('div', { 'class': 'liuli-card liuli-metric' }, [
-			E('div', { 'class': 'top' }, [ iconEl(icon, 'ico'), label ]),
-			E('div', { 'class': 'val' }, [ String(value), E('small', {}, [ unit ]) ])
-		]);
+	renderDevices() {
+		const dev = this.computeDevices();
+		const list = dev.list;
+
+		if (!list.length) {
+			dom.content(this.elDevHero, []);
+			dom.content(this.elDevices, [ this.empty('暂未检测到客户端设备') ]);
+			this.devList = [];
+			return;
+		}
+
+		const top = list.filter((x) => x.online).sort((a, b) => (b.rx + b.tx) - (a.rx + a.tx))[0] || list[0];
+		const topTotal = top.rx + top.tx;
+
+		if (topTotal > 0) {
+			dom.content(this.elDevHero, [
+				EE('div', { 'class': 'll-hero' }, [
+					iconEl(top.type, 'll-hero-icon', top.brand),
+					EE('div', { 'class': 'll-hero-body' }, [
+						EE('div', { 'class': 'll-hero-title' }, ['今日流量冠军']),
+						EE('div', { 'class': 'll-hero-name' }, [ top.name ]),
+						EE('div', { 'class': 'll-hero-meta' }, [
+							`${TYPE_NAMES[top.type] || '设备'} · ${top.vendor} · ${top.wireless ? '无线' : '有线'} · ${top.ip || '—'}`
+						]),
+						EE('div', { 'class': 'll-hero-traffic' }, [
+							`↓ ${fmtBytes(top.rx)}`, EE('span', { 'class': 'sep' }, '/'), `↑ ${fmtBytes(top.tx)}`
+						])
+					]),
+					EE('div', { 'class': 'll-hero-badge' }, [ 'TOP 1' ])
+				])
+			]);
+		}
+		else {
+			dom.content(this.elDevHero, [
+				EE('div', { 'class': 'll-hero muted' }, [
+					EE('div', { 'class': 'll-hero-body' }, [
+						EE('div', { 'class': 'll-hero-title' }, ['今日流量统计']),
+						EE('div', { 'class': 'll-hero-name' }, ['暂无数据']),
+						EE('div', { 'class': 'll-hero-meta' }, ['流量计数器刚建立或设备刚刚上线，稍等片刻即可看到排行'])
+					])
+				])
+			]);
+		}
+
+		dom.content(this.elDevices, list.map((d) => this.deviceCard(d)));
+		this.devList = list;
+		this.applyFilter();
 	},
 
 	deviceCard(dev) {
@@ -482,88 +1167,102 @@ return view.extend({
 		const band = dev.wireless ? (wifiBand(dev.iface) || '无线') : '有线';
 		const sig = dev.wireless ? signalText(dev.signal) : null;
 
-		const node = E('div', {
-			'class': 'liuli-card liuli-device' + (dev.online ? '' : ' offline'),
+		return EE('div', {
+			'class': 'll-card ll-device' + (dev.online ? '' : ' offline'),
 			'data-type': type,
 			'data-online': dev.online ? '1' : '0',
 			'data-wireless': dev.wireless ? '1' : '0'
 		}, [
-			E('div', { 'class': 'd-head' }, [
+			EE('div', { 'class': 'd-head' }, [
 				iconEl(type, 'd-icon', dev.brand),
-				E('div', { 'class': 'd-title' }, [
-					E('div', { 'class': 'd-name' }, [ dev.name ]),
-					E('div', { 'class': 'd-meta' }, [ `${dev.vendor} · ${TYPE_NAMES[type] || '设备'}` ])
+				EE('div', { 'class': 'd-title' }, [
+					EE('div', { 'class': 'd-name' }, [ dev.name ]),
+					EE('div', { 'class': 'd-meta' }, [ `${dev.vendor} · ${TYPE_NAMES[type] || '设备'}` ])
 				]),
-				dev.rank == 1 ? E('span', { 'class': 'd-rank top' }, ['TOP 1']) :
-					(dev.rank > 1 ? E('span', { 'class': 'd-rank' }, ['#' + dev.rank]) : null)
+				dev.rank == 1 ? EE('span', { 'class': 'd-rank top' }, ['TOP 1']) :
+					(dev.rank > 1 ? EE('span', { 'class': 'd-rank' }, ['#' + dev.rank]) : null)
 			]),
-			E('div', { 'class': 'd-rows' }, [
-				E('div', { 'class': 'd-row' }, [ E('span', { 'class': 'k' }, ['IP 地址']), E('span', { 'class': 'v mono' }, [ dev.ip || '—' ]) ]),
-				E('div', { 'class': 'd-row' }, [ E('span', { 'class': 'k' }, ['MAC']), E('span', { 'class': 'v mono' }, [ dev.mac ]) ]),
-				E('div', { 'class': 'd-row' }, [ E('span', { 'class': 'k' }, ['连接方式']), E('span', { 'class': 'v' }, [ band + (sig ? ` · ${sig}` : '') ]) ]),
-				E('div', { 'class': 'd-row' }, [ E('span', { 'class': 'k' }, ['今日流量']), E('span', { 'class': 'v mono traffic' }, [ `↓ ${fmtBytes(dev.rx)} · ↑ ${fmtBytes(dev.tx)}` ]) ])
+			EE('div', { 'class': 'd-rows' }, [
+				EE('div', { 'class': 'd-row' }, [ EE('span', { 'class': 'k' }, ['IP 地址']), EE('span', { 'class': 'v mono' }, [ dev.ip || '—' ]) ]),
+				EE('div', { 'class': 'd-row' }, [ EE('span', { 'class': 'k' }, ['MAC']), EE('span', { 'class': 'v mono' }, [ dev.mac ]) ]),
+				EE('div', { 'class': 'd-row' }, [ EE('span', { 'class': 'k' }, ['连接方式']), EE('span', { 'class': 'v' }, [ band + (sig ? ` · ${sig}` : '') ]) ]),
+				EE('div', { 'class': 'd-row' }, [ EE('span', { 'class': 'k' }, ['今日流量']), EE('span', { 'class': 'v mono traffic' }, [ `↓ ${fmtBytes(dev.rx)} · ↑ ${fmtBytes(dev.tx)}` ]) ])
 			]),
-			E('div', { 'class': 'd-status' }, [
-				E('span', { 'class': 'dot' + (dev.online ? ' on' : '') }),
+			EE('div', { 'class': 'd-status' }, [
+				EE('span', { 'class': 'dot' + (dev.online ? ' on' : '') }),
 				dev.online ? '在线' : '离线'
 			])
 		]);
-
-		return node;
 	},
 
-	applyFilter(key) {
-		for (const dev of this.deviceList) {
-			const node = this.deviceNodes[dev.mac];
-			if (!node)
-				continue;
+	applyFilter() {
+		const key = this.filterKey || 'all';
+		for (const node of this.elDevices.childNodes) {
+			if (!node.getAttribute) continue;
 			let show = true;
-			if (key == 'online') show = dev.online;
-			else if (key == 'wireless') show = dev.wireless;
-			else if (key == 'phone') show = (dev.type == 'phone' || dev.type == 'tablet');
-			else if (key == 'computer') show = (dev.type == 'laptop' || dev.type == 'desktop');
-			else if (key == 'tv') show = (dev.type == 'tv');
-			else if (key == 'nas') show = (dev.type == 'nas');
-			else if (key == 'iot') show = (dev.type == 'iot');
+			if (key == 'online') show = node.getAttribute('data-online') == '1';
+			else if (key == 'wireless') show = node.getAttribute('data-wireless') == '1';
+			else if (key == 'phone') show = ['phone', 'tablet'].indexOf(node.getAttribute('data-type')) >= 0;
+			else if (key == 'computer') show = ['laptop', 'desktop'].indexOf(node.getAttribute('data-type')) >= 0;
+			else if (key == 'tv') show = node.getAttribute('data-type') == 'tv';
+			else if (key == 'nas') show = node.getAttribute('data-type') == 'nas';
+			else if (key == 'iot') show = node.getAttribute('data-type') == 'iot';
 			node.style.display = show ? '' : 'none';
 		}
 	},
 
+	/* ---------- 系统日志 ---------- */
+
+	renderLog() {
+		const l = this.data.log;
+		const entries = (l && l.log) ? l.log : [];
+
+		if (!entries.length) {
+			dom.content(this.elLog, [ this.empty('暂无日志 (logd 不可用或日志为空)') ]);
+			return;
+		}
+
+		dom.content(this.elLog, [
+			EE('div', { 'class': 'll-logbox' }, entries.slice().reverse().map((e) => {
+				const prio = Number(e.priority) || 6;
+				const sev = SEVERITY[prio % 8] || 'info';
+				const fac = FACILITY[Math.floor(prio / 8)] || 'local0';
+				return EE('div', { 'class': 'll-logline sev-' + (prio % 8) }, [
+					EE('span', { 'class': 'll-logtime mono' }, [ fmtClock(e.time) ]),
+					EE('span', { 'class': 'll-logtag' }, [ fac + '.' + sev ]),
+					EE('span', { 'class': 'll-logmsg' }, [ String(e.msg ?? '') ])
+				]);
+			}))
+		]);
+	},
+
+	empty(text) {
+		return EE('div', { 'class': 'll-empty' }, [ String(text) ]);
+	},
+
 	refresh() {
 		const self = this;
-		callDevices().then(function(raw) {
-			const d = raw ?? {};
-			const selfMacs = {};
-			for (let m of (d.self_macs ?? []))
-				selfMacs[fmtMac(m)] = 1;
-			const traffic = d.traffic ?? {};
-			const stations = {};
-			for (let s of (d.stations ?? []))
-				stations[fmtMac(s.mac)] = s;
-			const arp = {};
-			for (let a of (d.arp ?? []))
-				arp[fmtMac(a.mac)] = a.ip;
-			const leases = {};
-			for (let l of (d.leases ?? []))
-				leases[fmtMac(l.mac)] = l;
 
-			for (let mac in self.deviceNodes) {
-				if (selfMacs[mac])
-					continue;
-				const node = self.deviceNodes[mac];
-				const ip = leases[mac]?.ip ?? arp[mac];
-				const t = traffic[ip];
-				const on = arp[mac] || stations[mac];
-				const trafficEl = node.querySelector('.traffic');
-				if (t && trafficEl)
-					trafficEl.textContent = `↓ ${fmtBytes(t.rx)} · ↑ ${fmtBytes(t.tx)}`;
-				const dot = node.querySelector('.dot');
-				const statusText = node.querySelector('.d-status');
-				if (dot && statusText) {
-					dot.className = 'dot' + (on ? ' on' : '');
-					statusText.lastChild.textContent = on ? '在线' : '离线';
-				}
-			}
+		/* 视图已被卸载 —— 注销轮询，避免离开页面后继续请求 */
+		if (!this.rootEl || !document.body.contains(this.rootEl)) {
+			if (this.pollFn)
+				poll.remove(this.pollFn);
+			return Promise.resolve();
+		}
+
+		const safe = (p) => p.catch(() => null);
+
+		return Promise.all([
+			safe(callDevices()),
+			safe(callSystem()),
+			safe(callLog(40))
+		]).then(function(raw) {
+			self.data = {
+				devices: (raw[0] && typeof raw[0] == 'object') ? raw[0] : self.data.devices,
+				system: (raw[1] && typeof raw[1] == 'object') ? raw[1] : self.data.system,
+				log: (raw[2] && typeof raw[2] == 'object') ? raw[2] : self.data.log
+			};
+			self.renderAll();
 		}).catch(function() {});
 	}
 });

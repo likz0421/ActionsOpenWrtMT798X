@@ -4,10 +4,44 @@
 -#}
 
 {%
+	import { cursor } from 'uci';
+
 	const boardinfo = ubus.call('system', 'board');
 	const hostname = striptags(boardinfo?.hostname ?? '?');
-	const distname = version?.distname ?? 'ImmortalWrt';
+	const distname = (version?.distname ?? 'ImmortalWrt') == 'ImmortalWrt' ? 'OpenWrt' : version?.distname;
 	const distver = version?.distversion ?? '';
+
+	/* 主题自定义 (系统 → 琉璃主题设置) */
+	const u = cursor();
+	const raw = (k, d) => (u.get('liuli', 'main', k) ?? d);
+	const color = (k, d) => {
+		const v = String(raw(k, d) ?? '');
+		return match(v, /^#[0-9a-fA-F]{6}$/) ? v : d;
+	};
+	const num = (k, d) => {
+		const v = String(raw(k, d) ?? '');
+		return match(v, /^[0-9]{1,3}$/) ? int(v) : d;
+	};
+	const safe = (k, d) => {
+		const v = String(raw(k, d) ?? '');
+		return match(v, /^[A-Za-z0-9\-._~:\/?#\[\]@!$&*+,;=%() ]*$/) ? v : d;
+	};
+
+	const c_primary  = color('primary', '#5b7cfa');
+	const c_primary2 = color('primary2', '#8b5cf6');
+	const n_blur     = num('blur', 22);
+	const n_radius   = num('radius', 18);
+	const n_glass    = num('glass', 62);
+	const n_dstart   = num('dark_start', 19);
+	const n_dend     = num('dark_end', 7);
+	const n_dim      = num('bg_dim', 0);
+	const s_dark     = safe('dark', 'auto');
+	const s_bg       = safe('bg_image', '');
+	const s_lbg      = safe('login_bg', '');
+	const b_blobs    = (String(raw('blobs', '1')) == '1');
+
+	const g1 = sprintf('%.2f', n_glass / 100);
+	const g2 = sprintf('%.2f', min(0.96, (n_glass + 16) / 100));
 
 	http.prepare_content('text/html; charset=UTF-8');
 -%}
@@ -18,11 +52,72 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<meta name="darkreader-lock">
 		<meta name="robots" content="noindex, nofollow">
-		<title>{{ hostname }} - LuCI</title>
-		<link rel="stylesheet" href="{{ media }}/css/cascade.css">
-		<link rel="icon" type="image/svg+xml" href="{{ media }}/img/favicon.svg">
-		<script src="{{ dispatcher.build_url('admin/translations', dispatcher.lang) }}"></script>
-	</head>
+	<title>{{ hostname }} - LuCI</title>
+	<script>
+	(function () {
+		var KEY = 'liuli.theme';
+		var NIGHT_START = {{ n_dstart }}, NIGHT_END = {{ n_dend }};
+		var FORCE = '{{ s_dark }}';
+		var pref = FORCE;
+		if (FORCE !== 'light' && FORCE !== 'dark') {
+			pref = 'auto';
+			try { pref = localStorage.getItem(KEY) || 'auto'; } catch (e) {}
+		}
+		var mode = pref;
+		if (mode !== 'light' && mode !== 'dark') {
+			var h = new Date().getHours();
+			mode = (h >= NIGHT_START || h < NIGHT_END) ? 'dark' : 'light';
+			if (mode === 'light')
+				try {
+					if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+						mode = 'dark';
+				} catch (e) {}
+		}
+		var r = document.documentElement;
+		r.setAttribute('data-liuli-theme', mode);
+		r.setAttribute('data-liuli-pref', pref);
+		r.setAttribute('data-liuli-force', FORCE);
+			r.setAttribute('data-liuli-night-start', NIGHT_START);
+			r.setAttribute('data-liuli-night-end', NIGHT_END);
+	})();
+	</script>
+	<link rel="stylesheet" href="{{ media }}/css/cascade.css">
+	<link rel="icon" type="image/svg+xml" href="{{ media }}/img/favicon.svg">
+	<style id="liuli-custom">
+		:root {
+			--liuli-primary: {{ c_primary }};
+			--liuli-primary-2: {{ c_primary2 }};
+			--liuli-blur: blur({{ n_blur }}px) saturate(1.55);
+			--liuli-radius: {{ n_radius }}px;
+			--liuli-radius-sm: {{ int(n_radius * 0.68) }}px;
+			--liuli-glass: rgba(255, 255, 255, {{ g1 }});
+			--liuli-glass-strong: rgba(255, 255, 255, {{ g2 }});
+		}
+		:root[data-liuli-theme="dark"] {
+			--liuli-glass: rgba(23, 29, 45, {{ g1 }});
+			--liuli-glass-strong: rgba(27, 34, 53, {{ g2 }});
+		}
+		{% if (s_lbg != '' || s_bg != ''): %}
+		html, body {
+			background-image: url("{{ s_lbg != '' ? s_lbg : s_bg }}");
+			background-size: cover;
+			background-position: center;
+			background-attachment: fixed;
+		}
+		{% endif %}
+		{% if (n_dim > 0): %}
+		.liuli-bg::before {
+			content: ""; position: absolute; inset: 0; z-index: 1;
+			background: rgba(8, 12, 22, {{ sprintf('%.2f', n_dim / 100) }});
+		}
+		{% endif %}
+		{% if (!b_blobs): %}
+		.liuli-bg .blob { display: none; }
+		{% endif %}
+	</style>
+	<script src="{{ dispatcher.build_url('admin/translations', dispatcher.lang) }}"></script>
+	<script src="{{ resource }}/liuli-theme.js"></script>
+</head>
 	<body class="lang_{{ dispatcher.lang }}">
 		<div class="liuli-bg" aria-hidden="true">
 			<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
@@ -54,8 +149,15 @@
 					<input id="luci-password" class="cbi-input-text" type="password" name="luci_password"
 						autocomplete="current-password" autofocus>
 				</div>
-				<button class="go" type="submit">登 录</button>
-				<div class="foot">{{ distname }}{{ distver ? ` ${distver}` : '' }} · LuCI · 琉璃主题 v1.0</div>
+			<button class="go" type="submit">登 录</button>
+			<button type="button" class="liuli-themebtn" data-liuli-toggle onclick="window.liuliThemeToggle(event)">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="12" cy="12" r="4.2"/>
+					<path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>
+				</svg>
+				<span class="liuli-theme-label">自动</span>
+			</button>
+			<div class="foot">{{ distname }}{{ distver ? ` ${distver}` : '' }} · LuCI · 琉璃主题 v1.0</div>
 			</form>
 		</div>
 

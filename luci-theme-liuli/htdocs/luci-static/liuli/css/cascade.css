@@ -651,3 +651,122 @@ pre, .cbi-value-field pre, code {
 }
 .liuli-nav a.sub.active { color: #3b4fd8; font-weight: 600; }
 .liuli-nav a.sub.active::before { background: var(--liuli-primary); box-shadow: 0 0 6px rgba(99,102,241,.7); }
+
+/* ============================================================
+   夜间模式 / 深色玻璃
+   html[data-liuli-theme="dark"] 由 head 内联脚本预置, 由
+   resources/liuli-theme.js 按 19:00-07:00 自动切换或手动覆盖。
+   ============================================================ */
+
+:root[data-liuli-theme="dark"] {
+  color-scheme: dark;
+  --liuli-primary: #93a5ff;
+  --liuli-primary-2: #b39bff;
+  --liuli-accent: #38bdf8;
+  --liuli-ink: #e9eef9;
+  --liuli-ink-2: #b8c4da;
+  --liuli-ink-3: #7f8da8;
+  --liuli-glass: rgba(23, 29, 45, 0.62);
+  --liuli-glass-strong: rgba(27, 34, 53, 0.80);
+  --liuli-glass-soft: rgba(30, 38, 58, 0.42);
+  --liuli-line: rgba(255, 255, 255, 0.10);
+  --liuli-shadow: 0 8px 32px rgba(0, 0, 0, .40), 0 2px 8px rgba(0, 0, 0, .24);
+  --liuli-shadow-lg: 0 24px 64px rgba(0, 0, 0, .52), 0 4px 16px rgba(0, 0, 0, .30);
+}
+
+html[data-liuli-theme="dark"],
+html[data-liuli-theme="dark"] body { background: #0a0e17; }
+
+html[data-liuli-theme="dark"] .liuli-bg {
+  background: linear-gradient(160deg, #0a0e17 0%, #101728 45%, #14122b 100%);
+}
+html[data-liuli-theme="dark"] .liuli-bg .blob { opacity: .26; }
+html[data-liuli-theme="dark"] .liuli-bg::after { opacity: .035; filter: invert(1); }
+
+html[data-liuli-theme="dark"] .liuli-card::before,
+html[data-liuli-theme="dark"] .cbi-map::before {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+}
+
+/* 链接 / 强调色 */
+html[data-liuli-theme="dark"] a { color: #a5b4fc; }
+html[data-liuli-theme="dark"] a:hover { color: #c7d2fe; }
+html[data-liuli-theme="dark"] .liuli-tag { color: #a5b4fc; background: rgba(147,165,255,.14); border-color: rgba(147,165,255,.26); }
+html[data-liuli-theme="dark"] .liuli-tag.warn { color: #fbbf24; background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.28); }
+html[data-liuli-theme="dark"] .liuli-tag.info { color: #7dd3fc; background: rgba(14,165,233,.14); border-color: rgba(14,165,233,.26); }
+
+/* 表格 */
+html[data-liuli-theme="dark"] .liuli-table th { border-bottom-color: rgba(148,163,184,.20); }
+html[data-liuli-theme="dark"] .liuli-table td { border-bottom-color: rgba(148,163,184,.12); }
+html[data-liuli-theme="dark"] .liuli-table tbody tr:hover { background: rgba(255,255,255,.05); }
+
+/* 表单控件 */
+html[data-liuli-theme="dark"] .liuli-field input,
+html[data-liuli-theme="dark"] .cbi-input-text,
+html[data-liuli-theme="dark"] .cbi-input-select,
+html[data-liuli-theme="dark"] .cbi-input-password,
+html[data-liuli-theme="dark"] textarea,
+html[data-liuli-theme="dark"] input[type="text"],
+html[data-liuli-theme="dark"] input[type="password"],
+html[data-liuli-theme="dark"] input[type="number"],
+html[data-liuli-theme="dark"] select {
+  background: rgba(12, 17, 28, .62);
+  border-color: rgba(255,255,255,.12);
+  color: var(--liuli-ink);
+}
+html[data-liuli-theme="dark"] .liuli-field input::placeholder,
+html[data-liuli-theme="dark"] textarea::placeholder { color: #5d6b85; }
+
+/* LuCI 原生内容区 */
+html[data-liuli-theme="dark"] .cbi-section-node { border-bottom-color: rgba(148,163,184,.12); }
+html[data-liuli-theme="dark"] .cbi-section h3,
+html[data-liuli-theme="dark"] .cbi-page-actions,
+html[data-liuli-theme="dark"] .cbi-section > legend { color: var(--liuli-ink); }
+html[data-liuli-theme="dark"] .cbi-value-description,
+html[data-liuli-theme="dark"] .cbi-map-descr { color: var(--liuli-ink-3); }
+html[data-liuli-theme="dark"] table.table { color: var(--liuli-ink-2); }
+html[data-liuli-theme="dark"] table.table th,
+html[data-liuli-theme="dark"] table.table td { border-color: rgba(148,163,184,.14); }
+html[data-liuli-theme="dark"] table.table tbody tr:hover { background: rgba(255,255,255,.05); }
+html[data-liuli-theme="dark"] .alert-message { color: var(--liuli-ink-2); }
+html[data-liuli-theme="dark"] .alert-message.warning { background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.34); }
+html[data-liuli-theme="dark"] .alert-message.error { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.34); }
+html[data-liuli-theme="dark"] .alert-message h4 { color: var(--liuli-ink); }
+html[data-liuli-theme="dark"] fieldset,
+html[data-liuli-theme="dark"] .cbi-section { border-color: rgba(148,163,184,.16); }
+html[data-liuli-theme="dark"] .cbi-button,
+html[data-liuli-theme="dark"] .btn { color: var(--liuli-ink-2); }
+html[data-liuli-theme="dark"] .cbi-button:hover,
+html[data-liuli-theme="dark"] .btn:hover { color: var(--liuli-ink); }
+html[data-liuli-theme="dark"] code,
+html[data-liuli-theme="dark"] pre { background: rgba(12,17,28,.6); color: var(--liuli-ink); border-color: rgba(255,255,255,.10); }
+html[data-liuli-theme="dark"] .progressbar { background: rgba(255,255,255,.10); }
+
+/* ---------- 主题切换按钮 ---------- */
+.liuli-themebtn {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--liuli-ink-2);
+  background: var(--liuli-glass-strong);
+  border: 1px solid var(--liuli-line);
+  border-radius: 99px;
+  height: 30px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: all .2s;
+}
+.liuli-themebtn:hover { color: var(--liuli-ink); transform: translateY(-1px); }
+.liuli-themebtn svg { width: 14px; height: 14px; opacity: .8; }
+.liuli-themebtn .liuli-theme-label { font-variant-numeric: tabular-nums; }
+.liuli-login .liuli-themebtn {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  margin-top: 12px;
+}

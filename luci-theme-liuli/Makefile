@@ -43,10 +43,28 @@ define Package/luci-theme-liuli/install
 	$(CP) ./htdocs/luci-static/liuli/* $(1)/www/luci-static/liuli/
 	$(INSTALL_DIR) $(1)/www/luci-static/resources
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/*.js $(1)/www/luci-static/resources/
+	# 主题设置页 (系统 → 琉璃主题设置)
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/liuli
+	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/liuli/*.js $(1)/www/luci-static/resources/view/liuli/
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/template/themes/liuli
 	$(INSTALL_DATA) ./ucode/template/themes/liuli/*.ut $(1)/usr/share/ucode/luci/template/themes/liuli/
+	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-theme-liuli.json $(1)/usr/share/luci/menu.d/
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
+	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-theme-liuli.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./root/etc/config/liuli $(1)/etc/config/liuli
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./root/etc/uci-defaults/30_luci-theme-liuli $(1)/etc/uci-defaults/
+endef
+
+define Package/luci-theme-liuli/postinst
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] || {
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache/* 2>/dev/null
+	/etc/init.d/rpcd restart >/dev/null 2>&1
+}
+exit 0
 endef
 
 $(eval $(call BuildPackage,luci-theme-liuli))

@@ -1,6 +1,6 @@
 {
 	"admin/status/liuli": {
-		"title": "设备看板",
+		"title": "琉璃看板",
 		"order": 6,
 		"action": {
 			"type": "view",

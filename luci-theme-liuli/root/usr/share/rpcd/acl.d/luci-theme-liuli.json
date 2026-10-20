@@ -1,0 +1,15 @@
+{
+	"luci-theme-liuli": {
+		"description": "Grant access to Liuli theme settings",
+		"read": {
+			"uci": [ "liuli" ]
+		},
+		"write": {
+			"uci": [ "liuli" ],
+			"file": {
+				"/www/luci-static/liuli/liuli-bg": [ "write", "remove" ],
+				"/www/luci-static/liuli/liuli-login-bg": [ "write", "remove" ]
+			}
+		}
+	}
+}

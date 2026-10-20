@@ -1,14 +1,16 @@
-// 琉璃看板 — Liuli device dashboard backend (thin data layer)
-// Reads DHCP leases / ARP / wireless assoclist / nftables per-device
-// byte counters and returns them raw; the view does identification,
-// merging and ranking.
+// 琉璃看板 — Liuli router dashboard backend (thin data layer)
+//
+//  · getDevices()  DHCP leases / ARP / 无线关联 / nftables 每设备流量
+//  · getSystem()   机型 / 运行时间 / 负载 / 内存 / CPU / 温度 / 连接数 /
+//                  挂载点 / 服务启停状态 / 网络接口 / 无线射频
+//  · getLog()      系统日志 (ubus log read)
 //
 // Copyright 2026 likz0421
 // Licensed under the Apache License 2.0
 
 'use strict';
 
-import { popen, readfile, writefile, access } from 'fs';
+import { popen, readfile, writefile, access, lsdir, glob } from 'fs';
 import { connect } from 'ubus';
 
 const STATE_FILE = '/var/run/liuli-daily.json';
@@ -29,6 +31,17 @@ function today() {
 	return out ? trim(out) : '';
 }
 
+function ubusCall(obj, method, args) {
+	const ubus = connect();
+	if (!ubus)
+		return null;
+	try {
+		return ubus.call(obj, method, args ?? {});
+	} catch (e) {
+		return null;
+	}
+}
+
 function read_json(path) {
 	if (!access(path))
 		return null;
@@ -44,7 +57,12 @@ function is_ipv4(s) {
 	return type(s) == 'string' && match(s, /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) != null;
 }
 
-/* ---------- 原始数据读取 ---------- */
+function num(s) {
+	const n = int(trim(String(s ?? '')));
+	return (n == null) ? 0 : n;
+}
+
+/* ---------- 设备相关数据 ---------- */
 
 function readLeases() {
 	const leases = [];
@@ -76,16 +94,14 @@ function readArp() {
 			continue;
 		if (f[2] != '0x2' || f[3] == '00:00:00:00:00:00')
 			continue;
-		arp.push({ mac: f[3], ip: f[0] });
+		arp.push({ mac: f[3], ip: f[0], device: f[5] });
 	}
 	return arp;
 }
 
 function readStations() {
 	const stations = [];
-	const ubus = connect();
-	let radios = {};
-	try { radios = ubus.call('luci-rpc', 'getWirelessDevices') ?? {}; } catch (e) {}
+	const radios = ubusCall('luci-rpc', 'getWirelessDevices') ?? {};
 
 	for (let name, radio in radios) {
 		const ifaces = radio?.interfaces ?? [];
@@ -94,7 +110,10 @@ function readStations() {
 			if (!dev)
 				continue;
 			let res = null;
-			try { res = ubus.call('iwinfo', 'assoclist', { device: dev }); } catch (e) {}
+			try {
+				const ubus = connect();
+				res = ubus?.call('iwinfo', 'assoclist', { device: dev });
+			} catch (e) {}
 			for (let st of (res?.results ?? [])) {
 				if (st?.mac)
 					stations.push({
@@ -111,9 +130,7 @@ function readStations() {
 
 function selfMacs() {
 	const macs = [];
-	const ubus = connect();
-	let devs = {};
-	try { devs = ubus.call('network.device', 'status') ?? {}; } catch (e) {}
+	const devs = ubusCall('network.device', 'status') ?? {};
 	for (let name, dev in devs)
 		if (dev?.macaddr)
 			macs.push(dev.macaddr);
@@ -217,6 +234,385 @@ function todayTraffic() {
 	return result;
 }
 
+/* ---------- 系统概况 ---------- */
+
+function boardInfo() {
+	const b = ubusCall('system', 'board') ?? {};
+	const rel = b.release ?? {};
+	return {
+		hostname: b.hostname ?? null,
+		model: b.model ?? null,
+		system: b.system ?? null,
+		kernel: b.kernel ?? null,
+		target: rel.target ?? null,
+		distribution: rel.distribution ?? null,
+		version: rel.version ?? null,
+		revision: rel.revision ?? null,
+		description: rel.description ?? null
+	};
+}
+
+function systemInfo() {
+	const i = ubusCall('system', 'info') ?? {};
+	const mem = i.memory ?? {};
+	const swp = i.swap ?? {};
+	return {
+		uptime: i.uptime ?? 0,
+		localtime: i.localtime ?? time(),
+		load: i.load ?? [0, 0, 0],
+		processes: i.processes ?? 0,
+		memory: {
+			total: mem.total ?? 0,
+			free: mem.free ?? 0,
+			shared: mem.shared ?? 0,
+			buffered: mem.buffered ?? 0,
+			available: (mem.available != null) ? mem.available : null
+		},
+		swap: {
+			total: swp.total ?? 0,
+			free: swp.free ?? 0
+		}
+	};
+}
+
+function cpuInfo() {
+	const s = readfile('/proc/cpuinfo');
+	let count = 0, model = null, hardware = null, revision = null, mips = null;
+
+	if (s) {
+		for (let line of split(s, '\n')) {
+			line = trim(line);
+			if (!line)
+				continue;
+			const idx = index(line, ':');
+			if (idx == null || idx < 0)
+				continue;
+			const key = trim(substr(line, 0, idx));
+			const val = trim(substr(line, idx + 1));
+			if (key == 'processor')
+				count++;
+			else if (key == 'model name' && !model)
+				model = val;
+			else if (key == 'Hardware' && !hardware)
+				hardware = val;
+			else if (key == 'Revision' && !revision)
+				revision = val;
+			else if (key == 'BogoMIPS' && !mips)
+				mips = val;
+		}
+	}
+	if (!count)
+		count = 1;
+
+	const usage = trim(sh("top -n1 | awk '/^CPU/ {printf(\"%d\", 100 - $8)}'") ?? '');
+	let pct = int(usage);
+	if (pct == null)
+		pct = null;
+
+	return {
+		count: count,
+		model: model ?? hardware ?? null,
+		hardware: hardware,
+		revision: revision,
+		bogomips: mips,
+		usage: pct
+	};
+}
+
+function tempInfo() {
+	const zones = [];
+	const paths = glob('/sys/class/thermal/thermal_zone*/temp') ?? [];
+	sort(paths);
+
+	for (let i = 0; i < length(paths); i++) {
+		const p = paths[i];
+		const raw = readfile(p);
+		if (!raw)
+			continue;
+		const v = int(trim(raw));
+		if (!v)
+			continue;
+		const tp = substr(p, 0, length(p) - 4) + 'type';
+		let name = null;
+		if (access(tp))
+			name = trim(readfile(tp) ?? '');
+		zones.push({ zone: name ?? ('zone' + i), value: v / 1000 });
+	}
+
+	let text = null;
+	if (access('/sbin/tempinfo')) {
+		const t = sh('/sbin/tempinfo');
+		if (t)
+			text = trim(t);
+	}
+
+	return { zones: zones, text: text };
+}
+
+function conntrackInfo() {
+	let count = null, max = null;
+	if (access('/proc/sys/net/netfilter/nf_conntrack_count'))
+		count = num(readfile('/proc/sys/net/netfilter/nf_conntrack_count'));
+	if (access('/proc/sys/net/netfilter/nf_conntrack_max'))
+		max = num(readfile('/proc/sys/net/netfilter/nf_conntrack_max'));
+	return { count: count, max: max };
+}
+
+function mountPoints() {
+	const out = [];
+	const s = sh('df -kPl');
+	if (!s)
+		return out;
+
+	for (let line of split(s, '\n')) {
+		line = trim(line);
+		if (!line)
+			continue;
+		if (substr(line, 0, 10) == 'Filesystem')
+			continue;
+		const f = split(line, /[ \t]+/);
+		if (length(f) < 6)
+			continue;
+		const kb = num(f[1]);
+		if (!kb)
+			continue;
+		out.push({
+			device: f[0],
+			mount: f[5],
+			size: kb * 1024,
+			used: num(f[2]) * 1024,
+			avail: num(f[3]) * 1024,
+			percent: num(replace(f[4], '%', ''))
+		});
+	}
+	return out;
+}
+
+function services() {
+	let scripts = lsdir('/etc/init.d') ?? [];
+	scripts = filter(scripts, (s) => substr(s, 0, 1) != '.');
+	sort(scripts);
+
+	const rcd = lsdir('/etc/rc.d') ?? [];
+	let idx = {}, en = {};
+
+	for (let e of rcd) {
+		if (substr(e, 0, 1) != 'S')
+			continue;
+		const rest = substr(e, 1);
+		const nn = substr(rest, 0, 2);
+		const nm = substr(rest, 2);
+		if (length(nm) < 1 || match(nn, /^[0-9][0-9]$/) == null)
+			continue;
+		en[nm] = true;
+		idx[nm] = int(nn);
+	}
+
+	const running = {};
+	const sl = ubusCall('service', 'list') ?? {};
+	for (let name, svc in sl) {
+		let n = 0;
+		let pids = [];
+		for (let iname, inst in (svc?.instances ?? {}))
+			if (inst?.running) {
+				n++;
+				if (inst?.pid)
+					push(pids, inst.pid);
+			}
+		running[name] = { running: (n > 0), instances: n, pids: pids };
+	}
+
+	const out = [];
+	for (let s of scripts) {
+		const st = running[s] ?? {};
+		out.push({
+			name: s,
+			index: idx[s] ?? null,
+			enabled: en[s] ?? false,
+			running: st.running ?? false,
+			instances: st.instances ?? 0
+		});
+	}
+	return out;
+}
+
+function deviceStats() {
+	const devs = ubusCall('network.device', 'status') ?? {};
+	const out = {};
+
+	for (let name, d in devs) {
+		const st = d?.statistics ?? {};
+		out[name] = {
+			rx_bytes: st.rx_bytes ?? 0,
+			tx_bytes: st.tx_bytes ?? 0,
+			rx_packets: st.rx_packets ?? 0,
+			tx_packets: st.tx_packets ?? 0
+		};
+	}
+	return out;
+}
+
+function processes() {
+	const s = sh('top -bn1');
+	const out = [];
+
+	if (!s)
+		return out;
+
+	let started = false;
+
+	for (let line of split(s, '\n')) {
+		if (!started) {
+			if (match(line, /^\s*PID\s+PPID\s+USER/))
+				started = true;
+			continue;
+		}
+
+		const l = trim(line);
+		if (!l)
+			continue;
+
+		const f = split(l, /[ \t]+/);
+		if (length(f) < 8)
+			continue;
+
+		push(out, {
+			pid: num(f[0]),
+			ppid: num(f[1]),
+			user: f[2],
+			stat: f[3],
+			vsz: num(f[4]),
+			cpu: num(replace(f[6], '%', '')),
+			command: join(' ', slice(f, 7))
+		});
+
+		if (length(out) >= 12)
+			break;
+	}
+	return out;
+}
+
+function interfaces() {
+	const dump = ubusCall('network.interface', 'dump') ?? {};
+	const stats = deviceStats();
+	const out = [];
+
+	for (let ifc of (dump?.interface ?? [])) {
+		const a4 = (ifc['ipv4-address'] ?? [])[0] ?? null;
+		const a6 = (ifc['ipv6-address'] ?? [])[0] ?? null;
+
+		let gw4 = null, gw6 = null;
+		for (let rt of (ifc.route ?? [])) {
+			if (rt?.table && rt.table != 'main')
+				continue;
+			if (rt?.target == '0.0.0.0' && rt?.mask == 0 && !gw4)
+				gw4 = rt.nexthop;
+			else if (rt?.target == '::' && rt?.mask == 0 && !gw6)
+				gw6 = rt.nexthop;
+		}
+
+		const dns = [];
+		for (let d of (ifc['dns-server'] ?? []))
+			push(dns, d);
+
+		out.push({
+			interface: ifc.interface,
+			device: ifc.l3_device ?? ifc.device ?? null,
+			up: !!ifc.up,
+			available: !!ifc.available,
+			autostart: !!ifc.autostart,
+			pending: !!ifc.pending,
+			proto: ifc.proto ?? null,
+			uptime: ifc.uptime ?? 0,
+			macaddr: ifc.macaddr ?? null,
+			ip4: a4 ? { address: a4.address, mask: a4.mask } : null,
+			ip6: a6 ? { address: a6.address, mask: a6.mask } : null,
+			gateway: gw4,
+			gateway6: gw6,
+			dns: dns,
+			stats: stats[ifc.l3_device ?? ifc.device] ?? null,
+			is_wan: (gw4 != null || gw6 != null) || match(ifc.interface ?? '', /^wan/i) != null
+		});
+	}
+	return out;
+}
+
+function wirelessRadios() {
+	const st = ubusCall('network.wireless', 'status') ?? {};
+	const out = [];
+
+	for (let radio, r in st) {
+		const ifaces = [];
+		for (let i of (r?.interfaces ?? [])) {
+			const cfg = i?.config ?? {};
+			ifaces.push({
+				ifname: i?.ifname ?? null,
+				ssid: cfg.ssid ?? null,
+				mode: cfg.mode ?? null,
+				encryption: cfg.encryption ?? null,
+				hidden: !!cfg.hidden,
+				disabled: !!cfg.disabled,
+				network: cfg.network ?? []
+			});
+		}
+		out.push({
+			radio: radio,
+			up: !!r?.up,
+			disabled: !!r?.disabled,
+			pending: !!r?.pending,
+			channel: r?.channel ?? null,
+			frequency: r?.frequency ?? null,
+			txpower: r?.txpower ?? null,
+			quality: r?.quality ?? null,
+			quality_max: r?.quality_max ?? null,
+			noise: r?.noise ?? null,
+			bitrate: r?.bitrate ?? null,
+			hwmode: r?.config?.hwmode ?? null,
+			band: r?.config?.band ?? null,
+			country: r?.config?.country ?? null,
+			interfaces: ifaces
+		});
+	}
+	return out;
+}
+
+function logEntries(n) {
+	const count = int(n) || 40;
+	const res = ubusCall('log', 'read', { lines: count, stream: false, oneshot: true });
+	const out = [];
+
+	if (!res)
+		return out;
+
+	let raw = res.log ?? res.lines ?? null;
+
+	if (raw && type(raw) == 'array') {
+		for (let e of raw) {
+			if (type(e) == 'array')
+				out.push({ time: e[0] ?? null, priority: e[1] ?? 6, msg: trim(String(e[3] ?? e[2] ?? '')) });
+			else if (type(e) == 'object')
+				out.push({
+					time: e.time ?? null,
+					priority: (e.priority != null) ? e.priority : 6,
+					msg: trim(String(e.msg ?? e.message ?? ''))
+				});
+		}
+	}
+
+	/* 降级: logd 不可用时读 syslog 环外文件 */
+	if (!length(out)) {
+		const fallback = sh('logread -l ' + count);
+		if (fallback)
+			for (let line of split(fallback, '\n')) {
+				line = trim(line);
+				if (line)
+					out.push({ time: null, priority: 6, msg: line });
+			}
+	}
+
+	return out;
+}
+
 /* ---------- RPC ---------- */
 
 const methods = {
@@ -248,6 +644,31 @@ const methods = {
 				self_macs: selfMacs(),
 				date: today()
 			};
+		}
+	},
+
+	getSystem: {
+		call: function(request) {
+			return {
+				board: boardInfo(),
+				system: systemInfo(),
+				cpu: cpuInfo(),
+				temp: tempInfo(),
+				conntrack: conntrackInfo(),
+				mounts: mountPoints(),
+				services: services(),
+				interfaces: interfaces(),
+				wireless: wirelessRadios(),
+				procs: processes(),
+				date: today()
+			};
+		}
+	},
+
+	getLog: {
+		args: { lines: 40 },
+		call: function(request) {
+			return { log: logEntries(request?.args?.lines ?? 40) };
 		}
 	}
 };
