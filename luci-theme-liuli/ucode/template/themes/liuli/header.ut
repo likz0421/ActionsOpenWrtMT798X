@@ -26,6 +26,11 @@
 
 	const distver = version?.distversion ?? '';
 
+	/* 未设 root 密码告警: 部分 luci.core 构建未导出 getspnam, 直接调用 getspnam('root')
+	   会在登录页/首页抛 "left-hand side is not a function"。这里做存在性守卫。 */
+	const is_root = (type(getuid) == 'function') ? getuid() == 0 : false;
+	const root_pw_empty = is_root && (type(getspnam) == 'function') && (getspnam('root')?.pwdp ?? '') === '';
+
 	include('themes/' + theme + '/head', { hostname: hostname, is_login: false });
 %}
 
@@ -112,7 +117,7 @@
 
 			<main class="liuli-content">
 				<div id="maincontent">
-					{% if (getuid() == 0 && getspnam('root')?.pwdp === ''): %}
+					{% if (root_pw_empty): %}
 					<div class="alert-message warning">
 						<h4>! 未设置密码</h4>
 						<p>当前路由器没有设置管理密码, 请尽快配置 root 密码以保护 Web 界面。</p>
