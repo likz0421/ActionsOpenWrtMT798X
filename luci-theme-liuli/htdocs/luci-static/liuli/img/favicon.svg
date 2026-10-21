@@ -1,13 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5b7cfa"/>
-      <stop offset="1" stop-color="#8b5cf6"/>
-    </linearGradient>
-  </defs>
-  <rect x="1.5" y="1.5" width="21" height="21" rx="6" fill="url(#g)"/>
-  <g fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 5.5 6.5 8.5v7L12 18.5l5.5-3v-7L12 5.5Z"/>
-    <path d="M12 12 6.5 8.5M12 12l5.5-3.5M12 12v6.5"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+	<defs>
+		<linearGradient id="fb" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b7cfa"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+		<linearGradient id="fm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#b9c4ff"/></linearGradient>
+	</defs>
+	<rect x="1" y="1" width="30" height="30" rx="9" fill="url(#fb)"/>
+	<ellipse cx="16" cy="13.2" rx="9" ry="8.6" fill="url(#fm)"/>
+	<circle cx="13" cy="12.4" r="1.35" fill="#2b3354"/>
+	<circle cx="19" cy="12.4" r="1.35" fill="#2b3354"/>
+	<path d="M14.5 15.6c1 .95 2 .95 3 0" stroke="#2b3354" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+	<circle cx="11.4" cy="15.4" r="1.15" fill="#f9a8d4" opacity=".8"/>
+	<circle cx="20.6" cy="15.4" r="1.15" fill="#f9a8d4" opacity=".8"/>
+	<rect x="9.5" y="20.2" width="13" height="7" rx="2.4" fill="#1d2438"/>
+	<circle cx="12.6" cy="23.7" r="1" fill="#34d399"/>
+	<circle cx="16" cy="23.7" r="1" fill="#38bdf8"/>
+	<circle cx="19.4" cy="23.7" r="1" fill="#fbbf24"/>
 </svg>

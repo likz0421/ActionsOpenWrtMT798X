@@ -64,45 +64,8 @@
 		<meta name="darkreader-lock">
 		<meta name="robots" content="noindex, nofollow">
 		<title>{{ hostname }}{{ node?.title ? ` - ${striptags(node.title)}` : '' }} - LuCI</title>
-		<script>
-		/* 主题色调预置: 必须在 CSS 之前执行, 避免夜间模式闪白 */
-		(function () {
-			var KEY = 'liuli.theme';
-			var NIGHT_START = {{ n_dstart }}, NIGHT_END = {{ n_dend }};
-			var FORCE = '{{ s_dark }}';
-			var pref = FORCE;
-			if (FORCE === 'light' || FORCE === 'dark') {
-				/* 设置页已锁定为日间/夜间 */
-			} else if (FORCE === 'system') {
-				pref = 'system';
-			} else {
-				pref = 'auto';
-				try { pref = localStorage.getItem(KEY) || 'auto'; } catch (e) {}
-			}
-			var mode = pref;
-			if (mode !== 'light' && mode !== 'dark') {
-				if (mode === 'system') {
-					try {
-						mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-					} catch (e) { mode = 'light'; }
-				} else {
-					var h = new Date().getHours();
-					mode = (h >= NIGHT_START || h < NIGHT_END) ? 'dark' : 'light';
-					if (mode === 'light')
-						try {
-							if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-								mode = 'dark';
-						} catch (e) {}
-				}
-			}
-			var r = document.documentElement;
-			r.setAttribute('data-liuli-theme', mode);
-			r.setAttribute('data-liuli-pref', pref);
-			r.setAttribute('data-liuli-force', FORCE);
-			r.setAttribute('data-liuli-night-start', NIGHT_START);
-			r.setAttribute('data-liuli-night-end', NIGHT_END);
-		})();
-		</script>
+		<script>window.LIULI_BOOT={n:{{ n_dstart }},e:{{ n_dend }},f:'{{ s_dark }}'};</script>
+		<script src="{{ resource }}/liuli-boot.js"></script>
 		<link rel="stylesheet" href="{{ media }}/css/cascade.css">
 		<link rel="icon" type="image/svg+xml" href="{{ media }}/img/favicon.svg">
 		<style id="liuli-custom">

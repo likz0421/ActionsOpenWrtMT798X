@@ -66,46 +66,10 @@
 		<meta name="darkreader-lock">
 		<meta name="robots" content="noindex, nofollow">
 	<title>{{ hostname }} - LuCI</title>
-	<script>
-	(function () {
-		var KEY = 'liuli.theme';
-		var NIGHT_START = {{ n_dstart }}, NIGHT_END = {{ n_dend }};
-		var FORCE = '{{ s_dark }}';
-		var pref = FORCE;
-		if (FORCE === 'light' || FORCE === 'dark') {
-			/* 设置页已锁定为日间/夜间 */
-		} else if (FORCE === 'system') {
-			pref = 'system';
-		} else {
-			pref = 'auto';
-			try { pref = localStorage.getItem(KEY) || 'auto'; } catch (e) {}
-		}
-		var mode = pref;
-		if (mode !== 'light' && mode !== 'dark') {
-			if (mode === 'system') {
-				try {
-					mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-				} catch (e) { mode = 'light'; }
-			} else {
-				var h = new Date().getHours();
-				mode = (h >= NIGHT_START || h < NIGHT_END) ? 'dark' : 'light';
-				if (mode === 'light')
-					try {
-						if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-							mode = 'dark';
-					} catch (e) {}
-			}
-		}
-		var r = document.documentElement;
-		r.setAttribute('data-liuli-theme', mode);
-		r.setAttribute('data-liuli-pref', pref);
-		r.setAttribute('data-liuli-force', FORCE);
-		r.setAttribute('data-liuli-night-start', NIGHT_START);
-		r.setAttribute('data-liuli-night-end', NIGHT_END);
-	})();
-	</script>
-	<link rel="stylesheet" href="{{ media }}/css/cascade.css">
-	<link rel="icon" type="image/svg+xml" href="{{ media }}/img/favicon.svg">
+		<script>window.LIULI_BOOT={n:{{ n_dstart }},e:{{ n_dend }},f:'{{ s_dark }}'};</script>
+		<script src="{{ resource }}/liuli-boot.js"></script>
+		<link rel="stylesheet" href="{{ media }}/css/cascade.css">
+		<link rel="icon" type="image/svg+xml" href="{{ media }}/img/favicon.svg">
 	<style id="liuli-custom">
 		:root {
 			--liuli-primary: {{ c_primary }};
@@ -153,10 +117,7 @@
 		<div class="liuli-login-wrap">
 			<form class="liuli-login" method="post">
 				<div class="mark">
-					<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-						<path d="M12 2.5 4.5 7v10L12 21.5 19.5 17V7L12 2.5Z"/>
-						<path d="M12 12 4.5 7M12 12l7.5-5M12 12v9.5"/>
-					</svg>
+					<span class="liuli-mascot" aria-hidden="true"><span class="lm-float"><span class="lm-body"><span class="lm-cheek l"></span><span class="lm-cheek r"></span><span class="lm-eye l"></span><span class="lm-eye r"></span><span class="lm-mouth"></span></span><span class="lm-arm l"></span><span class="lm-arm r"></span><span class="lm-router"><span class="lm-ant"></span><span class="lm-led l"></span><span class="lm-led m"></span><span class="lm-led r"></span></span></span></span>
 				</div>
 				<h2>琉璃 Liuli</h2>
 				<div class="host">正在登录 <b>{{ hostname }}</b>{{ distver ? ` · ${distname} ${distver}` : '' }}</div>
@@ -176,7 +137,7 @@
 						autocomplete="current-password" autofocus>
 				</div>
 			<button class="go" type="submit">登 录</button>
-			<button type="button" class="liuli-themebtn" data-liuli-toggle onclick="window.liuliThemeToggle(event)">
+			<button type="button" class="liuli-themebtn" data-liuli-toggle>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
 					<circle cx="12" cy="12" r="4.2"/>
 					<path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>
