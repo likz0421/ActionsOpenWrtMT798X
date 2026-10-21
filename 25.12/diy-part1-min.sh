@@ -16,6 +16,16 @@ echo 'src-git istore https://github.com/linkease/istore;main' >> feeds.conf.defa
 mkdir -p package/custom
 
 # =========================================================
+# 琉璃主题 & 琉璃看板 (仓库内已包含 luci-theme-liuli / luci-app-liuli,
+# 直接拷入编译树, 编进固件镜像, 刷完即自带, 无需再单独安装)
+# 与 build-theme.yml 同一套 Makefile
+# =========================================================
+mkdir -p package/custom/liuli-theme package/custom/luci-app-liuli
+cp -r "$GITHUB_WORKSPACE/luci-theme-liuli/." package/custom/liuli-theme/
+cp -r "$GITHUB_WORKSPACE/luci-app-liuli/." package/custom/luci-app-liuli/
+echo "liuli 主题/看板已加入编译树"
+
+# =========================================================
 # Lucky: 官方 luci-app-lucky v3.3.3 (LuCI 应用)
 # 核心 lucky 包替换为 release.66666.host 官方 3.3.3 xiaojv
 # 预编译静态二进制 (aarch64/arm64), 非 GitHub 快照源码编译

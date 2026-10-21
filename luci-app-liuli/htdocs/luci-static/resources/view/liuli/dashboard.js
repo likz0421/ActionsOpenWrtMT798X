@@ -3,6 +3,7 @@
 'require rpc';
 'require poll';
 'require dom';
+'require ui';
 
 /* 琉璃看板 — Liuli router dashboard
  * 机器概况 / 系统状态 / 服务徽标 / 网络与无线 / 存储 /
@@ -32,6 +33,17 @@ const callLog = rpc.declare({
 	expect: { '': {} }
 });
 
+/* Open-Box 风格的外网延迟探测 */
+const callPing = rpc.declare({
+	object: 'luci.liuli',
+	method: 'ping',
+	params: [ 'targets' ],
+	expect: { '': {} }
+});
+
+/* 默认探测目标: 国内 DNS + 两家大厂域名, 直观反映出口质量 */
+const PING_TARGETS = [ '223.5.5.5', 'baidu.com', 'qq.com' ];
+
 /* LuCI 的 dom.append() 会把 children 数组里的 null / undefined 渲染成字面
  * 文本 "null" (它误判了 children 本身而非 children[i])。这里包一层,
  * 在交给 E() 之前把空项过滤掉。 */
@@ -41,6 +53,56 @@ const EE = function(tag, attrs, children) {
 		: (children == null ? [] : [ children ]);
 	return E(tag, attrs, list.filter((c) => c != null && c !== false && c !== ''));
 };
+
+/* ---------- 响应式 SVG 迷你图 (借鉴 argon-graphs 的 viewBox 缩放技巧) ---------- */
+
+const svgWrap = function(markup) {
+	const s = E('span', { 'style': 'display:inline-flex;line-height:0' });
+	s.innerHTML = markup;
+	return s;
+};
+
+function buildPoints(values, w, h, pad) {
+	if (!values.length)
+		return '';
+	const max = Math.max.apply(null, values.concat([1]));
+	const min = Math.min.apply(null, values.concat([0]));
+	const span = (max - min) || 1;
+	return values.map((v, i) => {
+		const x = (values.length === 1 ? w : (i / (values.length - 1)) * w);
+		const y = h - pad - ((v - min) / span) * (h - 2 * pad);
+		return x.toFixed(1) + ',' + y.toFixed(1);
+	}).join(' ');
+}
+
+/* 极简 sparkline: 透明背景 + 单色折线
+ * 无采样时画一条虚线基线, 避免卡片看起来像坏了 (仍保持 viewBox 以防塌陷) */
+function sparkSvg(values, color, w, h) {
+	const pts = buildPoints(values, w, h, 2);
+	const box = 'viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"';
+	if (!pts)
+		return '<svg width="' + w + '" height="' + h + '" ' + box + '>' +
+			'<line x1="0" y1="' + (h / 2) + '" x2="' + w + '" y2="' + (h / 2) +
+			'" stroke="' + color + '" stroke-width="1.8" stroke-dasharray="3 4" opacity=".5"/></svg>';
+	return '<svg width="' + w + '" height="' + h + '" ' + box + '>' +
+		'<polyline points="' + pts + '" fill="none" stroke="' + color +
+		'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+
+/* 面积图: 填充 + 折线, 宽度 100% 自适应容器 (viewBox 保持比例) */
+function areaSvg(values, color, w, h) {
+	const pts = buildPoints(values, w, h, 5);
+	const box = 'viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"';
+	if (!pts)
+		return '<svg width="100%" height="' + h + '" ' + box + '>' +
+			'<line x1="0" y1="' + (h / 2) + '" x2="' + w + '" y2="' + (h / 2) +
+			'" stroke="' + color + '" stroke-width="1.6" stroke-dasharray="3 4" opacity=".5"/></svg>';
+	const area = '0,' + h + ' ' + pts + ' ' + w + ',' + h;
+	return '<svg width="100%" height="' + h + '" ' + box + '>' +
+		'<polygon points="' + area + '" fill="' + color + '22"/>' +
+		'<polyline points="' + pts + '" fill="none" stroke="' + color +
+		'" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
 
 /* ---------- 设备类型图标 (1.7px 线性) ---------- */
 
@@ -436,7 +498,8 @@ return view.extend({
 		return Promise.all([
 			safe(callDevices()),
 			safe(callSystem()),
-			safe(callLog(40))
+			safe(callLog(40)),
+			safe(callPing(PING_TARGETS))
 		]);
 	},
 
@@ -446,15 +509,21 @@ return view.extend({
 		this.data = {
 			devices: (raw[0] && typeof raw[0] == 'object') ? raw[0] : null,
 			system: (raw[1] && typeof raw[1] == 'object') ? raw[1] : null,
-			log: (raw[2] && typeof raw[2] == 'object') ? raw[2] : null
+			log: (raw[2] && typeof raw[2] == 'object') ? raw[2] : null,
+			ping: (raw[3] && typeof raw[3] == 'object') ? raw[3] : null
 		};
 		this.filterKey = 'all';
 		this.showAllServices = false;
 		this.rateHistory = [];
 		this.prevStats = null;
+		this.latencyHist = {};
+		this.connHist = [];
+		this.memHist = [];
+		this.paused = false;
 
 		this.elHead = EE('div', { 'class': 'll-head' });
 		this.elStats = EE('div', { 'class': 'll-grid ll-stats' });
+		this.elMonitor = EE('div', { 'class': 'll-grid ll-monitor' });
 		this.elInsight = EE('div', { 'class': 'll-grid ll-insight' });
 		this.elSystem = EE('div', { 'class': 'll-sys' });
 		this.elServices = EE('div', { 'class': 'll-badges' });
@@ -481,6 +550,7 @@ return view.extend({
 			this.elHead,
 			nav,
 			this.elStats,
+			this.elMonitor,
 			this.elInsight,
 			this.section('系统状态', 'll-sec-system', [ this.elSystem ]),
 			this.section('服务徽标', 'll-sec-services', [ this.elServices, this.elSvcMore ]),
@@ -649,19 +719,35 @@ return view.extend({
 				])
 			]),
 			EE('div', { 'class': 'll-headmeta' }, [
-				kv('运行时间', fmtUptime(info.uptime)),
-				kv('系统时间', p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds())),
-				kv('统计日期', sys.date || '—'),
-				kv('自动刷新', '10 秒'),
-				EE('button', {
-					'class': 'cbi-button cbi-button-apply ll-refresh',
-					'click': () => this.refresh()
-				}, ['立即刷新'])
-			])
-		]);
-	},
+			kv('运行时间', fmtUptime(info.uptime)),
+			kv('系统时间', p(now.getHours()) + ':' + p(now.getMinutes()) + ':' + p(now.getSeconds())),
+			kv('统计日期', sys.date || '—'),
+			kv('自动刷新', this.paused ? '已暂停' : '10 秒'),
+			EE('button', {
+				'class': 'cbi-button cbi-button-apply ll-refresh',
+				'click': () => this.refresh()
+			}, ['立即刷新']),
+			EE('button', {
+				'class': 'cbi-button ll-pause',
+				'data-liuli-pause': '1',
+				'data-paused': this.paused ? '1' : '0',
+				'click': (ev) => this.togglePause(ev.currentTarget)
+			}, [ this.paused ? '继续刷新' : '暂停刷新' ])
+		])
+	]);
+},
 
-	/* ---------- 概览卡片 ---------- */
+togglePause(btn) {
+	this.paused = !this.paused;
+	if (btn) {
+		btn.textContent = this.paused ? '继续刷新' : '暂停刷新';
+		btn.setAttribute('data-paused', this.paused ? '1' : '0');
+	}
+	ui.addNotification(null, E('p', {}, this.paused ? '已暂停实时刷新 (图表与历史保留)' : '已恢复实时刷新'), 'info');
+	this.renderHead();
+},
+
+/* ---------- 概览卡片 ---------- */
 
 	renderStats() {
 		const dev = this.dev ?? this.computeDevices();
@@ -682,6 +768,13 @@ return view.extend({
 			this.metric('连接数', (sys.conntrack && sys.conntrack.count != null) ? sys.conntrack.count : '—',
 				(sys.conntrack && sys.conntrack.max) ? '上限 ' + sys.conntrack.max : '', 'router')
 		]);
+
+		/* Open-Box 风格的实时监控条: 外网延迟 + 连接数/内存趋势 */
+		dom.content(this.elMonitor, [
+			this.latencyCard(),
+			this.trendCard('连接数', this.connHist, '#5b7cfa', sys.conntrack && sys.conntrack.count != null ? sys.conntrack.count : '—'),
+			this.trendCard('内存占用', this.memHist, '#8b5cf6', memPct + '%')
+		]);
 	},
 
 	metric(label, value, unit, icon) {
@@ -689,6 +782,39 @@ return view.extend({
 			EE('div', { 'class': 'm-top' }, [ iconEl(icon, 'ico'), label ]),
 			EE('div', { 'class': 'm-val' }, [ String(value) ]),
 			unit ? EE('div', { 'class': 'm-unit' }, [ String(unit) ]) : null
+		]);
+	},
+
+	/* Open-Box 风格的外网延迟测速卡: 多目标当前时延 + 历史 sparkline */
+	latencyCard() {
+		const results = (this.data.ping && this.data.ping.results) || [];
+
+		const rows = results.map((r) => {
+			const hist = this.latencyHist[r.host] || [];
+			const spark = svgWrap(sparkSvg(hist, r.ms == null ? '#94a3b8' : '#5b7cfa', 72, 22));
+			return EE('div', { 'class': 'll-lat-row' }, [
+				EE('span', { 'class': 'll-lat-host' }, [ r.host ]),
+				EE('span', { 'class': 'll-lat-ms ' + (r.ms == null ? 'bad' : '') },
+					[ r.ms == null ? '超时' : (Math.round(r.ms * 10) / 10) + ' ms' ]),
+				EE('span', { 'class': 'll-lat-spark' }, [ spark ])
+			]);
+		});
+
+		return EE('div', { 'class': 'll-card ll-latency ll-span2' }, [
+			EE('div', { 'class': 'll-cardtitle' }, [ iconEl('router', 'ico'), '外网延迟探测' ]),
+			rows.length ? EE('div', { 'class': 'll-lat-list' }, rows) : this.empty('探测中…'),
+			EE('div', { 'class': 'll-memmeta' }, [ '借鉴 Open-Box 延迟测速: 每 10 秒探测 ' + PING_TARGETS.join(' / ') ])
+		]);
+	},
+
+	/* 趋势面积图卡 (连接数 / 内存占用) */
+	trendCard(label, hist, color, current) {
+		const svg = svgWrap(areaSvg(hist, color, 240, 56));
+		return EE('div', { 'class': 'll-card ll-trend' }, [
+			EE('div', { 'class': 'll-cardtitle' }, [ iconEl('cpu', 'ico'), label + ' 趋势' ]),
+			EE('div', { 'class': 'll-trend-now' }, [ String(current == null ? '—' : current) ]),
+			EE('div', { 'class': 'll-trend-svg' }, [ svg ]),
+			EE('div', { 'class': 'll-memmeta' }, [ '最近 ' + (hist.length || 0) + ' 次采样' ])
 		]);
 	},
 
@@ -1505,19 +1631,58 @@ return view.extend({
 			return Promise.resolve();
 		}
 
+		/* 用户暂停了实时刷新, 跳过本次拉取 (历史与图表保留原样) */
+		if (this.paused)
+			return Promise.resolve();
+
 		const safe = (p) => p.catch(() => null);
 
 		return Promise.all([
 			safe(callDevices()),
 			safe(callSystem()),
-			safe(callLog(40))
+			safe(callLog(40)),
+			safe(callPing(PING_TARGETS))
 		]).then(function(raw) {
 			self.data = {
 				devices: (raw[0] && typeof raw[0] == 'object') ? raw[0] : self.data.devices,
 				system: (raw[1] && typeof raw[1] == 'object') ? raw[1] : self.data.system,
-				log: (raw[2] && typeof raw[2] == 'object') ? raw[2] : self.data.log
+				log: (raw[2] && typeof raw[2] == 'object') ? raw[2] : self.data.log,
+				ping: (raw[3] && typeof raw[3] == 'object') ? raw[3] : self.data.ping
 			};
 			self.renderAll();
+			self.pushHistory();
 		}).catch(function() {});
+	},
+
+	/* 把本次采样追加到历史缓冲 (供趋势图 / 延迟测速卡使用) */
+	pushHistory() {
+		if (this.paused)
+			return;
+		const sys = this.data.system;
+		if (sys && sys.conntrack && sys.conntrack.count != null) {
+			this.connHist.push(sys.conntrack.count);
+			if (this.connHist.length > 60)
+				this.connHist.shift();
+		}
+		if (sys && sys.system && sys.system.memory) {
+			const m = sys.system.memory;
+			const used = Math.max(0, (m.total || 0) - (m.free || 0) - (m.buffered || 0));
+			const pct = m.total ? Math.round(used / m.total * 100) : 0;
+			this.memHist.push(pct);
+			if (this.memHist.length > 60)
+				this.memHist.shift();
+		}
+		const ping = this.data.ping;
+		if (ping && ping.results) {
+			for (const r of ping.results) {
+				/* 探测失败(null)不写入历史, 否则会把 null 当 0 画出一条假谷底 */
+				if (r.ms == null)
+					continue;
+				const h = this.latencyHist[r.host] = this.latencyHist[r.host] || [];
+				h.push(r.ms);
+				if (h.length > 30)
+					h.shift();
+			}
+		}
 	}
 });

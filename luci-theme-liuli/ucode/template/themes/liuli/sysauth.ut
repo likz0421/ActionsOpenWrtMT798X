@@ -29,19 +29,32 @@
 
 	const c_primary  = color('primary', '#5b7cfa');
 	const c_primary2 = color('primary2', '#8b5cf6');
+	const c_primary_d = color('primary_dark', '');
 	const n_blur     = num('blur', 22);
 	const n_radius   = num('radius', 18);
 	const n_glass    = num('glass', 62);
+	const n_blur_d   = num('blur_dark', 22);
+	const n_glass_d  = num('glass_dark', 62);
 	const n_dstart   = num('dark_start', 19);
 	const n_dend     = num('dark_end', 7);
 	const n_dim      = num('bg_dim', 0);
 	const s_dark     = safe('dark', 'auto');
 	const s_bg       = safe('bg_image', '');
 	const s_lbg      = safe('login_bg', '');
+	const s_owp      = safe('online_wallpaper', 'none');
 	const b_blobs    = (String(raw('blobs', '1')) == '1');
 
 	const g1 = sprintf('%.2f', n_glass / 100);
 	const g2 = sprintf('%.2f', min(0.96, (n_glass + 16) / 100));
+	const g1_d = sprintf('%.2f', n_glass_d / 100);
+	const g2_d = sprintf('%.2f', min(0.96, (n_glass_d + 16) / 100));
+
+	/* 登录页背景: 显式 URL 优先; 其次在线壁纸 (Bing 每日); 最后退回主界面背景 */
+	const s_login_bg = (s_lbg != '') ? s_lbg
+		: (s_owp == 'bing') ? 'https://api.dujin.org/bing/1920.php'
+		: s_bg;
+	/* 视频背景走 <video> 标签, 图片走 CSS background-image */
+	const b_video = match(s_login_bg, /\.([mM][pP]4|[wW][eE][bB][mM]|[oO][gG][gG])$/) != null;
 
 	http.prepare_content('text/html; charset=UTF-8');
 -%}
@@ -59,26 +72,36 @@
 		var NIGHT_START = {{ n_dstart }}, NIGHT_END = {{ n_dend }};
 		var FORCE = '{{ s_dark }}';
 		var pref = FORCE;
-		if (FORCE !== 'light' && FORCE !== 'dark') {
+		if (FORCE === 'light' || FORCE === 'dark') {
+			/* 设置页已锁定为日间/夜间 */
+		} else if (FORCE === 'system') {
+			pref = 'system';
+		} else {
 			pref = 'auto';
 			try { pref = localStorage.getItem(KEY) || 'auto'; } catch (e) {}
 		}
 		var mode = pref;
 		if (mode !== 'light' && mode !== 'dark') {
-			var h = new Date().getHours();
-			mode = (h >= NIGHT_START || h < NIGHT_END) ? 'dark' : 'light';
-			if (mode === 'light')
+			if (mode === 'system') {
 				try {
-					if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-						mode = 'dark';
-				} catch (e) {}
+					mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+				} catch (e) { mode = 'light'; }
+			} else {
+				var h = new Date().getHours();
+				mode = (h >= NIGHT_START || h < NIGHT_END) ? 'dark' : 'light';
+				if (mode === 'light')
+					try {
+						if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+							mode = 'dark';
+					} catch (e) {}
+			}
 		}
 		var r = document.documentElement;
 		r.setAttribute('data-liuli-theme', mode);
 		r.setAttribute('data-liuli-pref', pref);
 		r.setAttribute('data-liuli-force', FORCE);
-			r.setAttribute('data-liuli-night-start', NIGHT_START);
-			r.setAttribute('data-liuli-night-end', NIGHT_END);
+		r.setAttribute('data-liuli-night-start', NIGHT_START);
+		r.setAttribute('data-liuli-night-end', NIGHT_END);
 	})();
 	</script>
 	<link rel="stylesheet" href="{{ media }}/css/cascade.css">
@@ -94,16 +117,30 @@
 			--liuli-glass-strong: rgba(255, 255, 255, {{ g2 }});
 		}
 		:root[data-liuli-theme="dark"] {
-			--liuli-glass: rgba(23, 29, 45, {{ g1 }});
-			--liuli-glass-strong: rgba(27, 34, 53, {{ g2 }});
+			--liuli-glass: rgba(23, 29, 45, {{ g1_d }});
+			--liuli-glass-strong: rgba(27, 34, 53, {{ g2_d }});
+			--liuli-blur: blur({{ n_blur_d }}px) saturate(1.55);
+			{% if (c_primary_d != ''): %}
+			--liuli-primary: {{ c_primary_d }};
+			--liuli-primary-2: {{ c_primary_d }};
+			{% endif %}
 		}
-		{% if (s_lbg != '' || s_bg != ''): %}
+		{% if (s_login_bg != '' && !b_video): %}
 		html, body {
-			background-image: url("{{ s_lbg != '' ? s_lbg : s_bg }}");
+			background-image: url("{{ s_login_bg }}");
 			background-size: cover;
 			background-position: center;
 			background-attachment: fixed;
 		}
+		{% endif %}
+		{% if (b_video): %}
+		/* 视频背景: 铺满 .liuli-bg, 光斑减弱保证文字可读 */
+		.liuli-bg .liuli-bgvideo {
+			position: absolute; inset: 0; width: 100%; height: 100%;
+			object-fit: cover; z-index: 0; pointer-events: none;
+		}
+		.liuli-bg.has-media { background: #0b1020; }
+		.liuli-bg.has-media .blob { opacity: .16; }
 		{% endif %}
 		{% if (n_dim > 0): %}
 		.liuli-bg::before {
@@ -119,7 +156,11 @@
 	<script src="{{ resource }}/liuli-theme.js"></script>
 </head>
 	<body class="lang_{{ dispatcher.lang }}">
-		<div class="liuli-bg" aria-hidden="true">
+		<div class="liuli-bg {{ b_video ? 'has-media' : '' }}" aria-hidden="true">
+			{% if (b_video): %}
+			<video class="liuli-bgvideo" autoplay muted loop playsinline preload="auto"
+				src="{{ s_login_bg }}"></video>
+			{% endif %}
 			<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
 			<div class="blob b4"></div><div class="blob b5"></div>
 		</div>

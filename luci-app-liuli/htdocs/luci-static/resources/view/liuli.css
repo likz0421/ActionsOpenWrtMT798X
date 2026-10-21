@@ -951,3 +951,27 @@ html[data-liuli-theme="dark"] .liuli-dash .ll-nav a.active {
 	opacity: 1;
 	transform: none;
 }
+
+/* ---------- 新增: 实时监控条 (Open-Box 风格延迟/趋势卡) ---------- */
+.liuli-dash .ll-monitor { margin-top: 14px; }
+.liuli-dash .ll-span2 { grid-column: span 2; }
+@media (max-width: 680px) { .liuli-dash .ll-span2 { grid-column: span 1; } }
+
+.liuli-dash .ll-latency .ll-lat-list { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; }
+.liuli-dash .ll-lat-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; }
+.liuli-dash .ll-lat-host { font-size: 12.5px; color: #475569; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.liuli-dash .ll-lat-ms { font-size: 14px; font-weight: 650; color: var(--d-primary); min-width: 58px; text-align: right; }
+.liuli-dash .ll-lat-ms.bad { color: #ef4444; }
+.liuli-dash .ll-lat-spark { width: 72px; height: 22px; opacity: .85; }
+html[data-liuli-theme="dark"] .liuli-dash .ll-lat-host { color: #aab4c5; }
+
+.liuli-dash .ll-trend { display: flex; flex-direction: column; }
+.liuli-dash .ll-trend-now { font-size: clamp(20px, 2vw, 26px); font-weight: 700; color: #1e293b; margin: 2px 0 6px; line-height: 1; }
+/* 图表吃掉卡片剩余高度, 与左侧 2 列宽的延迟卡等高对齐 */
+.liuli-dash .ll-trend-svg { width: 100%; flex: 1 1 auto; min-height: 56px; display: flex; }
+.liuli-dash .ll-trend-svg svg { display: block; width: 100%; height: 100%; }
+html[data-liuli-theme="dark"] .liuli-dash .ll-trend-now { color: #f1f5f9; }
+
+.liuli-dash .ll-pause { margin-left: 6px; }
+/* 已暂停时按钮变成醒目的主色, 提示"数据不再刷新" */
+.liuli-dash .ll-pause[data-paused="1"] { background: var(--d-primary); border-color: var(--d-primary); color: #fff; }

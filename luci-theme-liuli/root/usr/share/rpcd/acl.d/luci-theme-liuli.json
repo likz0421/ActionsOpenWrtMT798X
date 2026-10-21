@@ -24,5 +24,18 @@
 				"luci.liuli-theme": [ "setConfig" ]
 			}
 		}
+	},
+	"luci.liuli": {
+		"description": "Grant theme page access to background manager",
+		"read": {
+			"ubus": {
+				"luci.liuli": [ "bgList", "bgRemove", "bgRename" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"luci.liuli": [ "bgRemove", "bgRename" ]
+			}
+		}
 	}
 }

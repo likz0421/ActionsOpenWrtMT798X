@@ -10,7 +10,7 @@
 
 'use strict';
 
-import { popen, readfile, writefile, access, lsdir, glob } from 'fs';
+import { popen, readfile, writefile, access, lsdir, glob, stat, unlink, rename, mkdir } from 'fs';
 import { connect } from 'ubus';
 
 const STATE_FILE = '/var/run/liuli-daily.json';
@@ -613,6 +613,123 @@ function logEntries(n) {
 	return out;
 }
 
+/* ---------- 外网延迟探测 (借鉴 Open-Box 的延迟测速卡) ---------- */
+
+function shellquote(s) {
+	return replace(String(s ?? ''), /[^0-9a-zA-Z._:-]/g, '');
+}
+
+/* ucode 没有 parseFloat / Number:
+ * 乘法运算会强制把数字字符串转成数值 ("12.4" * 1 → 12.4) */
+function toNum(s) {
+	if (type(s) == 'int' || type(s) == 'double')
+		return s;
+	const n = s * 1;
+	return (type(n) == 'int' || type(n) == 'double') ? n : null;
+}
+
+/* 探测单个目标: 返回毫秒数 (失败为 null)。先 IPv4 后 IPv6。
+ * 仅在并行探测整体失败时作为兜底使用 (单目标 2s 上限)。 */
+function probeOne(host) {
+	let out = sh('ping -c 1 -W 1 ' + shellquote(host) + ' 2>/dev/null');
+	if (!out)
+		out = sh('ping6 -c 1 -W 1 ' + shellquote(host) + ' 2>/dev/null');
+	if (!out)
+		return null;
+
+	let ms = null;
+	const m = match(out, /time[<=]?\s*([0-9.]+)\s*ms/);
+	if (m)
+		ms = toNum(m[1]);
+	if (ms == null) {
+		const m2 = match(out, /min\/avg\/max\s*=\s*[0-9.]+\/([0-9.]+)\//);
+		if (m2)
+			ms = toNum(m2[1]);
+	}
+	return ms;
+}
+
+/* 并行探测多个目标。
+ * 为什么不循环调 probeOne: rpcd 的 ucode 对象是串行处理的, 3 个目标各阻塞 1s
+ * 会让整台路由器的 LuCI 接口卡住 3s。这里把所有 ping 放进同一个 sh(), 用
+ * 后台子 shell 并发执行再 wait, 总耗时 ≈ 1s。
+ * 每个子 shell 输出 "<host>|<ms>" (超时则 ms 为空串)。 */
+function pingBatch(hosts) {
+	const cmds = [];
+	const ok = [];
+
+	for (let i = 0; i < length(hosts); i++) {
+		const h = shellquote(hosts[i]);
+		if (h == '')
+			continue;
+		ok.push(hosts[i]);
+		/* 同时兼容 "time=12.4 ms" 和 BusyBox 的 "time<1 ms" */
+		const grab = "awk '/time/{sub(/^.*time[<=]? */,\"\"); sub(/ *ms.*/,\"\"); print; exit}'";
+		cmds.push(
+			'( m=$(ping -c 1 -W 1 ' + h + ' 2>/dev/null | ' + grab + '); ' +
+			'[ -z "$m" ] && m=$(ping6 -c 1 -W 1 ' + h + ' 2>/dev/null | ' + grab + '); ' +
+			'echo "' + h + '|$m" ) &'
+		);
+	}
+
+	if (!length(cmds))
+		return [];
+
+	const out = sh(join('', cmds) + ' wait');
+	const got = {};
+
+	if (out != null) {
+		for (let line of split(out, '\n')) {
+			line = trim(line);
+			if (line == '')
+				continue;
+			const p = split(line, '|');
+			if (length(p) < 2)
+				continue;
+			const v = trim(p[1]);
+			if (v != '' && match(v, /^[0-9]+(\.[0-9]+)?$/))
+				got[p[0]] = toNum(v);
+		}
+	}
+
+	const res = [];
+	for (let i = 0; i < length(ok); i++)
+		res.push({ host: ok[i], ms: (got[ok[i]] != null ? got[ok[i]] : null) });
+
+	return res;
+}
+
+/* ---------- 登录背景资源管理 (借鉴 argon 的登录背景管理器) ---------- */
+
+/* 背景资源目录: 与设置页上传目标 (/www/luci-static/liuli/liuli-bg,
+ * /www/luci-static/liuli/liuli-login-bg) 保持一致, 这样上传后能立刻出现在列表里 */
+const BG_DIR = '/www/luci-static/liuli';
+
+/* 文件是否为可用的背景媒体 (显式大小写类, 不依赖 regex 的 /i 标志) */
+function bgMedia(name) {
+	return match(name,
+		/\.([jJ][pP][gG]|[jJ][pP][eE][gG]|[pP][nN][gG]|[wW][eE][bB][pP]|[gG][iI][fF]|[aA][vV][iI][fF]|[bB][mM][pP]|[mM][pP]4|[wW][eE][bB][mM]|[oO][gG][gG])$/
+	) != null;
+}
+
+function safeName(s) {
+	if (type(s) != 'string' || match(s, /^[A-Za-z0-9._-]{1,128}$/) == null)
+		return null;
+	/* 只允许媒体文件, 防止误删 css/cascade.css 之类的主题资源 */
+	return bgMedia(s) ? s : null;
+}
+
+/* 是否为视频背景 (登录页用 <video> 渲染) */
+function bgVideo(name) {
+	return match(name, /\.([mM][pP]4|[wW][eE][bB][mM]|[oO][gG][gG])$/) != null;
+}
+
+function ensureBgDir() {
+	/* 不传 mode: 用进程 umask 的默认权限, 避免八进制字面量在 ucode 里的歧义 */
+	if (!access(BG_DIR))
+		mkdir(BG_DIR);
+}
+
 /* ---------- RPC ---------- */
 
 const methods = {
@@ -669,6 +786,97 @@ const methods = {
 		args: { lines: 40 },
 		call: function(request) {
 			return { log: logEntries(request?.args?.lines ?? 40) };
+		}
+	},
+
+	/* Open-Box 风格的外网延迟探测: 一次并发探测多个目标, 返回每个目标的时延(ms) */
+	ping: {
+		args: { targets: [] },
+		call: function(request) {
+			let targets = request?.args?.targets;
+			if (type(targets) != 'array' || !length(targets))
+				targets = [ '223.5.5.5', 'baidu.com', 'qq.com' ];
+			if (length(targets) > 6)
+				targets = slice(targets, 0, 6);
+
+			let results = pingBatch(targets);
+
+			/* 并发探测全灭: 可能是精简固件缺 awk / 不支持后台任务,
+			 * 退回逐个 ping (慢但兼容) */
+			let any = false;
+			for (let i = 0; i < length(results); i++)
+				if (results[i].ms != null) {
+					any = true;
+					break;
+				}
+			if (!any) {
+				const fallback = [];
+				for (let i = 0; i < length(targets); i++) {
+					const host = shellquote(targets[i]);
+					if (host == '')
+						continue;
+					fallback.push({ host: targets[i], ms: probeOne(host) });
+				}
+				results = fallback;
+			}
+
+			return { results: results, ts: unixtime() };
+		}
+	},
+
+	/* 背景资源管理: 列出 /www/luci-static/liuli 下已上传的图片/视频
+	 * (设置页上传的 liuli-bg / liuli-login-bg 就在这个目录, 与 Background 管理器同源) */
+	bgList: {
+		call: function(request) {
+			ensureBgDir();
+			if (!access(BG_DIR))
+				return { list: [] };
+			const names = lsdir(BG_DIR) ?? [];
+			const list = [];
+			for (let i = 0; i < length(names); i++) {
+				const n = names[i];
+				if (!safeName(n))
+					continue;
+				const st = stat(BG_DIR + '/' + n);
+				if (st && st.type == 'file')
+					list.push({
+						name: n,
+						size: st.size,
+						mtime: st.mtime,
+						video: bgVideo(n),
+						url: '/luci-static/liuli/' + n
+					});
+			}
+			list.sort((a, b) => b.mtime - a.mtime);
+			return { list: list };
+		}
+	},
+
+	bgRemove: {
+		args: { name: '' },
+		call: function(request) {
+			const n = safeName(request?.args?.name);
+			if (!n)
+				return { error: 'invalid name' };
+			const p = BG_DIR + '/' + n;
+			if (!access(p))
+				return { error: 'not found' };
+			unlink(p);
+			return { ok: true };
+		}
+	},
+
+	bgRename: {
+		args: { name: '', newname: '' },
+		call: function(request) {
+			const n = safeName(request?.args?.name);
+			const nn = safeName(request?.args?.newname);
+			if (!n || !nn)
+				return { error: 'invalid name' };
+			if (!access(BG_DIR + '/' + n))
+				return { error: 'not found' };
+			rename(BG_DIR + '/' + n, BG_DIR + '/' + nn);
+			return { ok: true };
 		}
 	}
 };

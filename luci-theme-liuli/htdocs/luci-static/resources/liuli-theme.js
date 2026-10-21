@@ -6,8 +6,8 @@
 
 (function () {
 	const KEY = 'liuli.theme';
-	const ORDER = [ 'auto', 'light', 'dark' ];
-	const LABEL = { auto: '自动', light: '日间', dark: '夜间' };
+	const ORDER = [ 'auto', 'system', 'light', 'dark' ];
+	const LABEL = { auto: '自动', system: '跟随系统', light: '日间', dark: '夜间' };
 
 	/* 夜间时段与强制模式由 head.ut 从 /etc/config/liuli 注入到 <html> 属性上 */
 	function nightRange() {
@@ -44,6 +44,15 @@
 		if (pref == 'dark' || pref == 'light')
 			return pref;
 
+		/* 跟随系统: 只看 prefers-color-scheme, 不受时间段影响 (借鉴 argon normal 模式) */
+		if (pref == 'system') {
+			try {
+				return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+			} catch (e) {
+				return 'light';
+			}
+		}
+
 		const h = new Date().getHours();
 		const r = nightRange();
 
@@ -56,6 +65,22 @@
 		} catch (e) {}
 
 		return 'light';
+	}
+
+	/* 同步浏览器地址栏/状态栏配色 (借鉴 argon 的 theme-color 设置) */
+	function updateThemeColor() {
+		try {
+			const c = getComputedStyle(document.documentElement).getPropertyValue('--liuli-primary').trim();
+			let meta = document.querySelector('meta[name="theme-color"]');
+			if (!c)
+				return;
+			if (!meta) {
+				meta = document.createElement('meta');
+				meta.setAttribute('name', 'theme-color');
+				document.head.appendChild(meta);
+			}
+			meta.setAttribute('content', c);
+		} catch (e) {}
 	}
 
 	function syncButtons() {
@@ -88,6 +113,7 @@
 		r.setAttribute('data-liuli-pref', pref);
 		r.setAttribute('data-liuli-theme', resolve(pref));
 		syncButtons();
+		updateThemeColor();
 	}
 
 	function cycle(ev) {
