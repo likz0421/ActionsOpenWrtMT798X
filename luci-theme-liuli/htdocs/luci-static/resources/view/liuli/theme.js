@@ -116,16 +116,16 @@ return view.extend({
 		s.option(form.DummyValue, '_bgsep', '').rawhtml = '<hr style="margin:18px 0;border:none;border-top:1px solid rgba(148,163,184,.25)">';
 
 		const bg = s.option(form.Value, 'bg_image', _('主界面背景图 URL'),
-			_('留空则使用内置的渐变光斑背景。可填图片 URL，也可用下方的上传按钮上传本地图片。'));
+			_('留空则使用内置的渐变光斑背景。可填图片/视频 URL，也可用下方的上传按钮上传本地文件。'));
 		bg.rmempty = true;
 
 		const bgupload = s.option(form.DummyValue, '_bgupload', _('上传主界面背景'));
 		bgupload.rawhtml =
-			'<input type="file" accept="image/*" data-liuli-upload="/www/luci-static/liuli/liuli-bg" ' +
+			'<input type="file" accept="image/*,video/*" data-liuli-upload="/www/luci-static/liuli/liuli-bg" ' +
 			'style="font-size:12px"> <button type="button" class="cbi-button" ' +
 			'data-liuli-do="/www/luci-static/liuli/liuli-bg" data-liuli-opt="bg_image">上传并应用</button>' +
 			' <button type="button" class="cbi-button" data-liuli-clear="bg_image">清除背景</button>' +
-			'<div style="font-size:11px;color:#94a3b8;margin-top:6px">支持 jpg/png/webp，最大 3MB</div>';
+			'<div style="font-size:11px;color:#94a3b8;margin-top:6px">支持 jpg/png/webp/mp4/webm，图片最大 3MB，视频最大 20MB</div>';
 
 		const bgdim = s.option(form.ListValue, 'bg_dim', _('背景压暗'),
 			_('背景图太亮导致文字看不清时开启。'));
