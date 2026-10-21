@@ -23,7 +23,16 @@ mkdir -p package/custom
 mkdir -p package/custom/liuli-theme package/custom/luci-app-liuli
 cp -r "$GITHUB_WORKSPACE/luci-theme-liuli/." package/custom/liuli-theme/
 cp -r "$GITHUB_WORKSPACE/luci-app-liuli/." package/custom/luci-app-liuli/
-echo "liuli 主题/看板已加入编译树"
+
+# 拷贝失败必须立刻失败: 否则 CONFIG_PACKAGE_luci-theme-liuli=y 会被 oldconfig
+# 静默丢掉, 最后编出来的是一个"没有琉璃主题"的固件, 而且全程绿灯看不出来
+if [ ! -f package/custom/liuli-theme/Makefile ] || [ ! -f package/custom/luci-app-liuli/Makefile ]; then
+	echo "::error::liuli 主题/看板拷贝失败 —— 拒绝继续编译 (会编出没有琉璃主题的固件)"
+	ls -la package/custom/ || true
+	exit 1
+fi
+echo "liuli 主题/看板已加入编译树:"
+ls package/custom/liuli-theme package/custom/luci-app-liuli
 
 # =========================================================
 # Lucky: 官方 luci-app-lucky v3.3.3 (LuCI 应用)
