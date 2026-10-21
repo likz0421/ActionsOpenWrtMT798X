@@ -46,7 +46,7 @@
 		<aside class="liuli-sidenav" id="mainmenu">
 			<div class="brand">
 				<div class="mark">
-					<span class="liuli-mascot" aria-hidden="true"><span class="lm-float"><span class="lm-body"><span class="lm-cheek l"></span><span class="lm-cheek r"></span><span class="lm-eye l"></span><span class="lm-eye r"></span><span class="lm-mouth"></span></span><span class="lm-arm l"></span><span class="lm-arm r"></span><span class="lm-router"><span class="lm-ant"></span><span class="lm-led l"></span><span class="lm-led m"></span><span class="lm-led r"></span></span></span></span>
+					<span class="liuli-mascot" aria-hidden="true"><span class="lm-float"><span class="lm-orb"></span><span class="lm-ring"></span></span></span>
 				</div>
 				<div>
 					<div class="name">{{ hostname }}</div>
@@ -72,7 +72,7 @@
 				</button>
 				<a class="brand" href="{{ dispatcher.build_url('admin/status/overview') }}" title="{{ entityencode(hostname, true) }}">
 					<div class="mark">
-						<span class="liuli-mascot" aria-hidden="true"><span class="lm-float"><span class="lm-body"><span class="lm-cheek l"></span><span class="lm-cheek r"></span><span class="lm-eye l"></span><span class="lm-eye r"></span><span class="lm-mouth"></span></span><span class="lm-arm l"></span><span class="lm-arm r"></span><span class="lm-router"><span class="lm-ant"></span><span class="lm-led l"></span><span class="lm-led m"></span><span class="lm-led r"></span></span></span></span>
+						<span class="liuli-mascot" aria-hidden="true"><span class="lm-float"><span class="lm-orb"></span><span class="lm-ring"></span></span></span>
 					</div>
 					<div><b>{{ hostname }}</b><small>{{ model }}</small></div>
 				</a>

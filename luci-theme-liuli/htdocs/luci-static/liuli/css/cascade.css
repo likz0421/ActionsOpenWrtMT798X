@@ -405,53 +405,26 @@ body {
 }
 .liuli-login .mark .liuli-mascot { width: 40px; height: 40px; }
 
-/* ---------- 琉璃小精灵抱着路由器 (纯 CSS 动画标志, 无 SVG) ---------- */
+/* ---------- 液态玻璃球标志 (纯 CSS, 无 SVG, 颜色随主题配色) ---------- */
 .liuli-mascot { position: relative; display: block; line-height: 0; }
-.lm-float { position: absolute; inset: 0; animation: lm-float 3.4s ease-in-out infinite; }
-.lm-body {
-  position: absolute; left: 14%; top: 0; width: 72%; height: 74%;
-  border-radius: 50% 50% 47% 47% / 55% 55% 45% 45%;
-  background: linear-gradient(155deg, #fff 0%, #dbe4ff 45%, #b9c4ff 70%, #8b5cf6 100%);
-  box-shadow: inset 0 2px 3px rgba(255,255,255,.9), inset 0 -4px 6px rgba(91,124,250,.4),
-    0 2px 5px rgba(91,124,250,.45);
-  z-index: 1;
+.lm-float { position: absolute; inset: 0; animation: lm-float 4.2s ease-in-out infinite; }
+.lm-orb {
+  position: absolute; left: 9%; top: 9%; width: 82%; height: 82%; border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--liuli-primary), var(--liuli-primary-2), #e6ecff, var(--liuli-primary-2), var(--liuli-primary));
+  animation: lm-spin 7s linear infinite;
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.65), inset 0 -3px 6px rgba(0,0,0,.18), 0 2px 5px rgba(91,124,250,.4);
 }
-.lm-eye { position: absolute; top: 40%; width: 9%; height: 11%; background: #2b3354; border-radius: 50%; z-index: 3; }
-.lm-eye.l { left: 35%; } .lm-eye.r { left: 56%; }
-.lm-mouth { position: absolute; left: 46%; top: 52.5%; width: 8%; height: 5.5%;
-  border: 1.5px solid #2b3354; border-top: 0; border-radius: 0 0 10px 10px; z-index: 3; }
-.lm-cheek { position: absolute; top: 50%; width: 10%; height: 7%; background: rgba(244,114,182,.5);
-  border-radius: 50%; filter: blur(.4px); z-index: 2; }
-.lm-cheek.l { left: 27%; } .lm-cheek.r { left: 63%; }
-.lm-router {
-  position: absolute; left: 24%; top: 55%; width: 52%; height: 33%;
-  border-radius: 26% / 36%;
-  background: linear-gradient(160deg, #2b3457, #171d31);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 2px 4px rgba(0,0,0,.4);
-  z-index: 2; animation: lm-glow 2.6s ease-in-out infinite;
+.lm-orb::after {
+  content: ""; position: absolute; left: 20%; top: 14%; width: 30%; height: 24%;
+  background: rgba(255,255,255,.75); border-radius: 50%; filter: blur(1.5px);
 }
-.lm-ant { position: absolute; left: 64%; top: 38%; width: 3.5%; height: 17%;
-  background: #3d476e; border-radius: 2px; z-index: 2; transform: rotate(16deg); }
-.lm-ant::after { content: ""; position: absolute; left: 50%; top: -38%; transform: translateX(-50%);
-  width: 240%; height: 52%; background: #e0e7ff; border-radius: 50%; box-shadow: 0 0 3px #c7d2fe; }
-.lm-led { position: absolute; top: 60%; width: 6%; height: 9%; border-radius: 50%; z-index: 3;
-  box-shadow: 0 0 2px rgba(255,255,255,.55); }
-.lm-led.l { left: 35%; background: #34d399; animation: lm-blink 1.7s infinite; }
-.lm-led.m { left: 47%; background: #38bdf8; animation: lm-blink 1.7s .55s infinite; }
-.lm-led.r { left: 59%; background: #fbbf24; animation: lm-blink 1.7s 1.1s infinite; }
-.lm-arm { position: absolute; top: 44%; width: 20%; height: 34%;
-  background: linear-gradient(160deg, #fff, #c7b6ff);
-  border-radius: 50% / 42%;
-  box-shadow: inset 0 1px 2px rgba(255,255,255,.85), 0 1px 3px rgba(91,124,250,.4);
-  z-index: 4; }
-.lm-arm.l { left: 4%; transform: rotate(20deg); transform-origin: top center; }
-.lm-arm.r { right: 4%; transform: rotate(-20deg); transform-origin: top center; }
+.lm-ring {
+  position: absolute; left: 5%; top: 5%; width: 90%; height: 90%; border-radius: 50%;
+  border: 1.5px solid transparent; border-top-color: rgba(255,255,255,.9);
+  border-right-color: rgba(255,255,255,.35); animation: lm-spin 3.2s linear infinite reverse;
+}
 @keyframes lm-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7%); } }
-@keyframes lm-blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
-@keyframes lm-glow {
-  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 2px 4px rgba(0,0,0,.4), 0 0 0 rgba(56,189,248,0); }
-  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 2px 4px rgba(0,0,0,.4), 0 0 6px rgba(56,189,248,.55); }
-}
+@keyframes lm-spin { to { transform: rotate(360deg); } }
 .liuli-login h2 { margin: 0 0 4px; font-size: 20px; font-weight: 750; }
 .liuli-login .host { color: var(--liuli-ink-3); font-size: 12.5px; margin-bottom: 24px; }
 .liuli-login .host b { color: var(--liuli-primary); }
@@ -512,8 +485,8 @@ body {
   .alert-message,
   .liuli-reveal,
   .lm-float,
-  .lm-led,
-  .lm-router,
+  .lm-orb,
+  .lm-ring,
   .liuli-collapse svg,
   .liuli-navbackdrop { animation: none !important; }
   /* 进入动画关闭时直接显形, 避免内容停留在透明态 */

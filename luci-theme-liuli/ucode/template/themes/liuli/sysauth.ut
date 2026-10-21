@@ -117,7 +117,7 @@
 		<div class="liuli-login-wrap">
 			<form class="liuli-login" method="post">
 				<div class="mark">
-					<span class="liuli-mascot" aria-hidden="true"><span class="lm-float"><span class="lm-body"><span class="lm-cheek l"></span><span class="lm-cheek r"></span><span class="lm-eye l"></span><span class="lm-eye r"></span><span class="lm-mouth"></span></span><span class="lm-arm l"></span><span class="lm-arm r"></span><span class="lm-router"><span class="lm-ant"></span><span class="lm-led l"></span><span class="lm-led m"></span><span class="lm-led r"></span></span></span></span>
+					<span class="liuli-mascot" aria-hidden="true"><span class="lm-float"><span class="lm-orb"></span><span class="lm-ring"></span></span></span>
 				</div>
 				<h2>琉璃 Liuli</h2>
 				<div class="host">正在登录 <b>{{ hostname }}</b>{{ distver ? ` · ${distname} ${distver}` : '' }}</div>
