@@ -11,5 +11,18 @@
 				"/www/luci-static/liuli/liuli-login-bg": [ "write", "remove" ]
 			}
 		}
+	},
+	"luci.liuli-theme": {
+		"description": "Grant access to Liuli theme config import/export",
+		"read": {
+			"ubus": {
+				"luci.liuli-theme": [ "getConfig" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"luci.liuli-theme": [ "setConfig" ]
+			}
+		}
 	}
 }

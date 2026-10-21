@@ -59,6 +59,16 @@ return view.extend({
 		s.anonymous = true;
 		s.addremove = false;
 
+		/* ---------- 配置导入 / 导出 ---------- */
+
+		const io = s.option(form.DummyValue, '_io', _('配置导入 / 导出'));
+		io.rawhtml = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:2px 0 4px">' +
+			'<button type="button" class="cbi-button cbi-button-apply" data-liuli-export="1">导出当前配置</button>' +
+			'<button type="button" class="cbi-button" data-liuli-import="1">导入配置</button>' +
+			'<input type="file" accept=".conf,.txt,application/json,text/plain" data-liuli-import-file style="display:none">' +
+			'<span data-liuli-io-msg style="font-size:11px;color:#94a3b8"></span>' +
+			'</div><div style="font-size:11px;color:#94a3b8;margin-top:4px">导出的 .conf 可在另一台装了琉璃主题的机器上「导入配置」一键还原配色与背景设置</div>';
+
 		/* ---------- 配色 ---------- */
 
 		const scheme = s.option(form.ListValue, 'scheme', _('内置配色方案'));
@@ -179,9 +189,61 @@ return view.extend({
 		de.depends('dark', 'auto');
 
 		return m.render().then((node) => {
+			const ioMsg = node.querySelector('[data-liuli-io-msg]');
+			const setMsg = (t) => { if (ioMsg) ioMsg.textContent = t; };
+			const callGet = rpc.declare({ object: 'luci.liuli-theme', method: 'getConfig', params: [] });
+			const callSet = rpc.declare({ object: 'luci.liuli-theme', method: 'setConfig', params: ['config'] });
+
+			/* 导入: 选择文件后读取并写回 */
+			const fileInput = node.querySelector('[data-liuli-import-file]');
+			if (fileInput)
+				fileInput.addEventListener('change', (ev) => {
+					const f = ev.target.files && ev.target.files[0];
+					if (!f)
+						return;
+					const rd = new FileReader();
+					rd.onerror = () => setMsg('读取文件失败');
+					rd.onload = () => {
+						const text = String(rd.result);
+						setMsg('正在写入配置…');
+						callSet(text).then((r) => {
+							if (r && r.ok) {
+								setMsg('导入成功，正在刷新…');
+								window.setTimeout(() => window.location.reload(), 600);
+							} else {
+								setMsg('导入失败: ' + ((r && r.error) ? r.error : '未知错误'));
+							}
+						}).catch((e) => setMsg('导入失败: ' + e));
+					};
+					rd.readAsText(f);
+					ev.target.value = '';
+				});
+
 			/* 上传交互 */
 			node.addEventListener('click', (ev) => {
 				const target = ev.target;
+
+				if (target.dataset.liuliExport != null) {
+					setMsg('正在读取配置…');
+					callGet().then((r) => {
+						const cfg = (r && r.config) ? r.config : '';
+						const blob = new Blob([cfg], { type: 'text/plain;charset=utf-8' });
+						const a = document.createElement('a');
+						const d = new Date().toISOString().slice(0, 10);
+						a.href = URL.createObjectURL(blob);
+						a.download = 'liuli-theme-' + d + '.conf';
+						a.click();
+						URL.revokeObjectURL(a.href);
+						setMsg('已导出 ' + cfg.length + ' 字节');
+					}).catch((e) => setMsg('导出失败: ' + e));
+					return;
+				}
+
+				if (target.dataset.liuliImport != null) {
+					if (fileInput)
+						fileInput.click();
+					return;
+				}
 
 				if (target.dataset.liuliDo) {
 					const path = target.dataset.liuliDo;

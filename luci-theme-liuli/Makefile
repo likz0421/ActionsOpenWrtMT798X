@@ -52,6 +52,8 @@ define Package/luci-theme-liuli/install
 	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-theme-liuli.json $(1)/usr/share/luci/menu.d/
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-theme-liuli.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/ucode
+	$(INSTALL_DATA) ./root/usr/share/rpcd/ucode/luci.liuli-theme $(1)/usr/share/rpcd/ucode/
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./root/etc/config/liuli $(1)/etc/config/liuli
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
