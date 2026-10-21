@@ -126,14 +126,6 @@
 			--liuli-primary-2: {{ c_primary_d }};
 			{% endif %}
 		}
-			{% if (s_bg != ''): %}
-			html, body {
-				background-image: url("{{ s_bg }}");
-				background-size: cover;
-				background-position: center;
-				background-attachment: fixed;
-			}
-			{% endif %}
 			{% if (n_dim > 0): %}
 			.liuli-bg::before {
 				content: "";

@@ -5,10 +5,16 @@
 
 {%
 	import { getuid, getspnam } from 'luci.core';
+	import { cursor } from 'uci';
 
 	const boardinfo = ubus.call('system', 'board');
 	const hostname = striptags(boardinfo?.hostname ?? '?');
 	const model = striptags(boardinfo?.model ?? '');
+
+	/* 背景图/视频: 作为 .liuli-bg 的子层渲染 (写 body{background-image} 会被 body 盒子背景盖掉) */
+	const tcfg = cursor();
+	const s_bg = String(tcfg.get('liuli', 'main', 'bg_image') ?? '');
+	const b_bgvideo = match(s_bg, /\.([mM][pP]4|[wW][eE][bB][mM]|[oO][gG][gG])$/) != null;
 	const sysinfo = ubus.call('system', 'info') ?? {};
 
 	const uptime = sysinfo.uptime ?? 0;
@@ -26,7 +32,12 @@
 <body class="lang_{{ dispatcher.lang }} {{ node?.title ? ` - ${striptags(node.title)}` : '' }} {% if (ctx.authsession): %}logged-in{% endif %}"
 	data-page="{{ entityencode(join('-', ctx.request_path), true) }}">
 
-	<div class="liuli-bg" aria-hidden="true">
+	<div class="liuli-bg {{ s_bg != '' ? 'has-media' : '' }}" aria-hidden="true">
+		{% if (b_bgvideo): %}
+		<video class="liuli-bgvideo" autoplay muted loop playsinline preload="auto" src="{{ s_bg }}"></video>
+		{% elif (s_bg != ''): %}
+		<div class="liuli-bgimg" style="background-image:url('{{ s_bg }}')"></div>
+		{% endif %}
 		<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
 		<div class="blob b4"></div><div class="blob b5"></div>
 	</div>
