@@ -3,7 +3,7 @@
 # https://github.com/P3TERX/Actions-OpenWrt
 # File name: diy-part1.sh
 # Description: OpenWrt DIY script part 1 (Before Update feeds)
-# s20p-min 个人精简版: 仅追加 Lucky(官方 3.3.3 xiaojv 预编译)
+# s20p-min 个人精简版: 仅追加 Lucky(官方 3.3.3 xiaojv 预编译) + 琉璃主题/看板(仓库内自带); 不克隆任何代理/VPN 套件
 #
 
 # 1. NAS feeds
@@ -127,27 +127,6 @@ endef
 
 $(eval $(call BuildPackage,lucky))
 LUCKY_EOF
-
-# 科学插件 (仅克隆, 本精简版不编译)
-# Passwall
-rm -rf feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-libev,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,trojan-plus,tuic-client,v2ray-plugin,xray-plugin,geoview,shadow-tls}
-git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git package/custom/passwall-packages
-rm -rf feeds/luci/applications/luci-app-passwall
-git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall.git package/custom/passwall
-git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall2.git package/custom/passwall2
-
-# OpenClash update to new version
-rm -rf feeds/luci/applications/luci-app-openclash
-git clone --depth=1 -b dev https://github.com/vernesong/OpenClash.git feeds/luci/applications/luci-app-openclash
-
-# 功能插件
-git clone --depth=1 https://github.com/sbwml/luci-app-openlist2.git package/custom/openlist2
-
-rm -rf feeds/packages/lang/golang
-git clone https://github.com/sbwml/packages_lang_golang -b 26.x feeds/packages/lang/golang
-
-# VPN
-git clone --depth=1 https://github.com/EasyTier/luci-app-easytier.git package/custom/easytier
 
 # change the default theme:
 sed -i 's/+luci-theme-bootstrap/+luci-theme-argon/g; s/default Bootstrap theme/Argon theme/g' feeds/luci/collections/luci-light/Makefile
